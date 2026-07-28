@@ -3,7 +3,8 @@
  * Plugin Name: Monitor de velocidad
  * Description: Panel de monitorización de velocidad de thaispamassage.es. Los datos los genera un bot en GitHub Actions (mide cada hora móvil/escritorio con Google Lighthouse).
  * Version:     1.0.0
- * Author:      AJ Dev
+ * Author:      dorica.agency
+ * Author URI:  https://dorica.agency/
  */
 if (!defined('ABSPATH')) exit;
 
@@ -122,7 +123,7 @@ function tsm_mon_render_page() {
         echo '</tbody></table>';
     }
 
-    echo '<p style="margin-top:18px;color:#9ca3af;font-size:12px;">Datos generados automáticamente por el bot · <a href="' . esc_url(TSM_MON_REPO_URL) . '" target="_blank">repositorio</a>. Medido con Google Lighthouse en móvil (5G) y escritorio.</p>';
+    echo '<p style="margin-top:18px;color:#9ca3af;font-size:12px;">Datos generados automáticamente por el bot · <a href="' . esc_url(TSM_MON_REPO_URL) . '" target="_blank">repositorio</a>. Medido con Google Lighthouse en móvil (5G) y escritorio. · Desarrollado por <a href="https://dorica.agency/" target="_blank">dorica.agency</a></p>';
     echo '</div>';
 
     // --- datos + JS del gráfico ---

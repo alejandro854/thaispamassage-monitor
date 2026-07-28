@@ -71,4 +71,4 @@ node monitor.js --report      # medición real + informe por email
 ```
 
 ---
-Monitor de velocidad · AJ Dev · 2026
+Monitor de velocidad · [dorica.agency](https://dorica.agency/) · 2026
