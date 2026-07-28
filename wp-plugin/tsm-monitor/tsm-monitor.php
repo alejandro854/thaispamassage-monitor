@@ -212,12 +212,24 @@ function tsm_mon_render_page() {
         requestAnimationFrame(step);
       });
 
+      // resaltar la línea de una página (atenuar las demás) al pasar el ratón por su chip
+      function highlight(key){
+        if(!chart)return;
+        chart.data.datasets.forEach(function(ds){
+          var on = key===null || ds.pgkey===key;
+          ds.borderColor = on ? ds._col : ds._col+'22';
+          ds.borderWidth = (key!==null && ds.pgkey===key) ? 3.5 : 2.5;
+        });
+        chart.update('none');
+      }
       // chips de leyenda (una por página, nombre corto + color)
       var chipsEl=document.getElementById('tsm-chips');
       PAGES.forEach(function(pg,i){
         var c=document.createElement('span'); c.className='tsm-chip'; c.dataset.key=pg.key;
         c.innerHTML='<span class="cdot" style="background:'+COLORS[i%COLORS.length]+'"></span>'+pg.name;
         c.addEventListener('click',function(){ hidden[pg.key]=!hidden[pg.key]; c.classList.toggle('off',hidden[pg.key]); build(); });
+        c.addEventListener('mouseenter',function(){ if(!hidden[pg.key]) highlight(pg.key); });
+        c.addEventListener('mouseleave',function(){ highlight(null); });
         chipsEl.appendChild(c);
       });
 
@@ -249,7 +261,7 @@ function tsm_mon_render_page() {
           if(hidden[pg.key])return;
           ffs.forEach(function(ff){
             var id=pg.key+':'+ff, col=COLORS[i%COLORS.length];
-            ds.push({label:pg.name+(ffs.length>1?' · '+(PROFS[ff]||ff):''),
+            ds.push({pgkey:pg.key,_col:col,label:pg.name+(ffs.length>1?' · '+(PROFS[ff]||ff):''),
               data:pts.map(function(p){var v=p[id];return{x:p.ts,y:(!v||v.down)?null:(state.metric==='score'?v.score:v.lcp)};}),
               borderColor:col, backgroundColor:(ffs.length===1?fill(ctx,col):'transparent'), fill:ffs.length===1,
               borderDash:ff==='desktop'&&ffs.length>1?[5,4]:[], borderWidth:2.5, pointRadius:0, pointHoverRadius:5,
