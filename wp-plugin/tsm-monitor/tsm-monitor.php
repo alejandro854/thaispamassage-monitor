@@ -257,21 +257,31 @@ function tsm_mon_render_page() {
           });
         });
         var labels=pts.map(function(p){return p.ts;});
+        // Zonas de fondo (verde=bien, ámbar=mejorable, rojo=malo) para leer el gráfico de un vistazo
+        var zones={id:'tsmzones',beforeDatasetsDraw:function(ch){var a=ch.chartArea,y=ch.scales.y,cx=ch.ctx;if(!a)return;
+          var bands=state.metric==='score'?[[90,100,'#16a34a'],[50,90,'#d97706'],[0,50,'#dc2626']]
+                                           :[[0,2.5,'#16a34a'],[2.5,4,'#d97706'],[4,(y.max||10),'#dc2626']];
+          cx.save();bands.forEach(function(b){var y1=y.getPixelForValue(b[1]),y2=y.getPixelForValue(b[0]);
+            cx.fillStyle=b[2]+'14';cx.fillRect(a.left,Math.min(y1,y2),a.right-a.left,Math.abs(y2-y1));});cx.restore();}};
+        function qual(v){ return state.metric==='score' ? (v>=90?'bien':v>=50?'mejorable':'malo') : (v<=2.5?'bien':v<4?'mejorable':'malo'); }
         if(chart)chart.destroy();
-        chart=new Chart(ctx,{type:'line',data:{labels:labels,datasets:ds},options:{
+        chart=new Chart(ctx,{type:'line',data:{labels:labels,datasets:ds},plugins:[zones],options:{
           responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart'},
           interaction:{mode:'index',intersect:false},
           scales:{x:{ticks:{maxTicksLimit:7,color:'#9ca3af',callback:function(v){return new Date(labels[v]).toLocaleDateString('es-ES',{day:'numeric',month:'short'});}},grid:{display:false}},
-            y:state.metric==='score'?{min:0,max:100,grid:{color:'#f0eee7'},ticks:{color:'#9ca3af'},title:{display:true,text:'Puntuación (más alto = mejor)',color:'#9ca3af'}}
-                                     :{min:0,grid:{color:'#f0eee7'},ticks:{color:'#9ca3af'},title:{display:true,text:'LCP en segundos (más bajo = mejor)',color:'#9ca3af'}}},
+            y:state.metric==='score'?{min:0,max:100,grid:{color:'rgba(0,0,0,.04)'},ticks:{color:'#9ca3af'},title:{display:true,text:'Puntuación (más alto = mejor)',color:'#9ca3af'}}
+                                     :{min:0,grid:{color:'rgba(0,0,0,.04)'},ticks:{color:'#9ca3af'},title:{display:true,text:'LCP en segundos (más bajo = mejor)',color:'#9ca3af'}}},
           plugins:{legend:{display:false},
             tooltip:{backgroundColor:'#1e1e1e',padding:12,cornerRadius:10,titleColor:'#e7c98a',
               callbacks:{title:function(it){return new Date(it[0].label).toLocaleString('es-ES');},
-                label:function(it){return it.dataset.label+': '+it.parsed.y+(state.metric==='lcp'?'s':'');}}}}
+                label:function(it){return it.dataset.label+': '+it.parsed.y+(state.metric==='lcp'?'s':'')+' · '+qual(it.parsed.y);}}}}
         }});
-        document.getElementById('tsm-note').textContent = state.device==='both'
-          ? 'Línea sólida = móvil · línea discontinua = escritorio. Toca una página en la leyenda para mostrarla u ocultarla.'
-          : 'Toca una página en la leyenda para mostrarla u ocultarla.';
+        document.getElementById('tsm-note').innerHTML =
+          '<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#16a34a;vertical-align:middle"></span> bien &nbsp; '
+          + '<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#d97706;vertical-align:middle"></span> mejorable &nbsp; '
+          + '<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#dc2626;vertical-align:middle"></span> malo &nbsp; · &nbsp; '
+          + (state.device==='both' ? 'línea sólida = móvil, discontinua = escritorio · ' : '')
+          + 'toca una página en la leyenda para mostrarla u ocultarla.';
       }
       if(document.readyState!=='loading')build(); else document.addEventListener('DOMContentLoaded',build);
     })();
