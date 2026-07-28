@@ -8,3 +8,8 @@ calib*.txt
 run-test*.txt
 test-send.mjs
 debug-*.mjs
+panel-preview.*
+gen-preview.mjs
+summary-test.json
+cdp_*.mjs
+*.pid
