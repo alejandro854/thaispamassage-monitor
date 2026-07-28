@@ -109,13 +109,13 @@ function tsm_mon_render_page() {
     $log = isset($d['alertsLog']) ? array_reverse($d['alertsLog']) : array();
     echo '<h2>Historial de incidencias</h2>';
     if (empty($log)) {
-        echo '<p style="color:#16a34a;font-weight:600;">Sin incidencias registradas. 🎉</p>';
+        echo '<p style="color:#16a34a;font-weight:600;">Sin incidencias registradas.</p>';
     } else {
         echo '<table class="widefat striped" style="max-width:820px;"><thead><tr><th>Cuándo</th><th>Tipo</th><th>Página</th><th>Dispositivo</th><th>Detalle</th></tr></thead><tbody>';
         foreach (array_slice($log, 0, 30) as $a) {
             $isRec = (isset($a['type']) && $a['type'] === 'recovery');
             echo '<tr><td>' . esc_html(wp_date('j M, H:i', strtotime($a['ts']))) . '</td>'
-                . '<td style="color:' . ($isRec ? '#16a34a' : '#dc2626') . ';font-weight:700;">' . ($isRec ? '✅ Recuperado' : '⚠️ Aviso') . '</td>'
+                . '<td style="color:' . ($isRec ? '#16a34a' : '#dc2626') . ';font-weight:700;">&#9679; ' . ($isRec ? 'Recuperado' : 'Aviso') . '</td>'
                 . '<td>' . esc_html(isset($a['page']) ? $a['page'] : '') . '</td>'
                 . '<td>' . esc_html(isset($a['profile']) ? $a['profile'] : '') . '</td>'
                 . '<td>' . esc_html(isset($a['detail']) ? $a['detail'] : '') . '</td></tr>';
