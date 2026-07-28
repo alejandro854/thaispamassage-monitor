@@ -11,6 +11,15 @@ export const PAGES = [
   { key: 'home',   name: 'Inicio',              url: 'https://thaispamassage.es/' },
   { key: 'masaje', name: 'Ficha de masaje',     url: 'https://thaispamassage.es/masaje-tailandes/' },
   { key: 'regala', name: 'Elegir masaje (regalo)', url: 'https://thaispamassage.es/regala-thai-spa-massage/' },
+  // Checkout: NO se cachea (por diseño), así que siempre es más lento. La señal
+  // clave aquí es el TTFB (tiempo de servidor). Con el carrito vacío redirige a
+  // /carrito/. Umbral propio, más alto, para alertar solo si el servidor se
+  // degrada de verdad (su normal: TTFB ~2,9s, score 72-93).
+  { key: 'checkout', name: 'Finalizar compra', url: 'https://thaispamassage.es/finalizar-compra/',
+    thresholds: {
+      mobile:  { lcp: 6.0, score: 35, ttfb: 6.0 },
+      desktop: { lcp: 5.0, score: 35, ttfb: 6.0 },
+    } },
 ];
 
 // --- Perfiles de medición ---------------------------------------------------
@@ -42,8 +51,8 @@ export const PROFILES = {
 // realmente malo, no un simple "mejorable". Medido en 5G la home va a ~99, así
 // que solo salta si la web se degrada de verdad.
 export const THRESHOLDS = {
-  mobile:  { lcp: 4.0, score: 50 },   // LCP en segundos, score 0-100
-  desktop: { lcp: 2.5, score: 50 },
+  mobile:  { lcp: 4.0, score: 50, ttfb: null },   // LCP en segundos, score 0-100, ttfb en s (null = no se comprueba)
+  desktop: { lcp: 2.5, score: 50, ttfb: null },
 };
 
 // Nº de mediciones seguidas en rojo antes de avisar (evita falsas alarmas por
