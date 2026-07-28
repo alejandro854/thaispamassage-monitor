@@ -1,11 +1,11 @@
 {
   "targets": {
     "home:mobile": {
-      "consecutiveBad": 0,
+      "consecutiveBad": 1,
       "alerting": false
     },
     "home:desktop": {
-      "consecutiveBad": 0,
+      "consecutiveBad": 1,
       "alerting": false
     },
     "masaje:mobile": {
@@ -33,5 +33,5 @@
       "alerting": false
     }
   },
-  "lastRun": "2026-07-28T14:19:01.673Z"
+  "lastRun": "2026-07-28T16:47:34.033Z"
 }
