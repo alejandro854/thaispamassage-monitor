@@ -23,7 +23,15 @@
     "regala:desktop": {
       "consecutiveBad": 0,
       "alerting": false
+    },
+    "checkout:mobile": {
+      "consecutiveBad": 0,
+      "alerting": false
+    },
+    "checkout:desktop": {
+      "consecutiveBad": 0,
+      "alerting": false
     }
   },
-  "lastRun": "2026-07-28T09:50:25.800Z"
+  "lastRun": "2026-07-28T10:57:22.818Z"
 }
