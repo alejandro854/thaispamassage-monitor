@@ -1,0 +1,29 @@
+{
+  "targets": {
+    "home:mobile": {
+      "consecutiveBad": 0,
+      "alerting": false
+    },
+    "home:desktop": {
+      "consecutiveBad": 0,
+      "alerting": false
+    },
+    "masaje:mobile": {
+      "consecutiveBad": 0,
+      "alerting": false
+    },
+    "masaje:desktop": {
+      "consecutiveBad": 0,
+      "alerting": false
+    },
+    "regala:mobile": {
+      "consecutiveBad": 0,
+      "alerting": false
+    },
+    "regala:desktop": {
+      "consecutiveBad": 0,
+      "alerting": false
+    }
+  },
+  "lastRun": "2026-07-28T09:50:25.800Z"
+}

@@ -1,0 +1,7 @@
+timestamp,pagina,dispositivo,score,lcp_s,fcp_s,tbt_ms,cls,speedindex_s,caida
+2026-07-28T09:50:25.800Z,Inicio,Móvil (5G),100,1.5,1.28,68,0.024,1.63,0
+2026-07-28T09:50:25.800Z,Inicio,Escritorio,92,1.46,1.18,0,0.004,1.49,0
+2026-07-28T09:50:25.800Z,Ficha de masaje,Móvil (5G),91,2.8,1.45,93,0.119,1.68,0
+2026-07-28T09:50:25.800Z,Ficha de masaje,Escritorio,90,1.53,1.26,2,0.007,1.6,0
+2026-07-28T09:50:25.800Z,Elegir masaje (regalo),Móvil (5G),98,1.39,1.25,123,0.062,2.58,0
+2026-07-28T09:50:25.800Z,Elegir masaje (regalo),Escritorio,89,1.35,1.21,11,0.024,2.29,0
