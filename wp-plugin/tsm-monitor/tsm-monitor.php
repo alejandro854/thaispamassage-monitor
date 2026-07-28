@@ -14,7 +14,7 @@ define('TSM_MON_REPO_URL',    'https://github.com/alejandro854/thaispamassage-mo
 define('TSM_MON_LOGO',        'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaispamassage.png');
 
 add_action('admin_menu', function () {
-    add_menu_page('Monitorización web', 'Monitorización web', 'manage_options',
+    add_menu_page('Monitorización', 'Monitorización', 'manage_options',
         'tsm-monitor', 'tsm_mon_render_page', 'dashicons-chart-area', 58);
 });
 
