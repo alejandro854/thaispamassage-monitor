@@ -1,0 +1,16 @@
+{
+  "name": "thaispamassage-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monitor de velocidad (Core Web Vitals) de thaispamassage.es con alertas por email.",
+  "type": "module",
+  "scripts": {
+    "monitor": "node monitor.js",
+    "preview-email": "node monitor.js --preview"
+  },
+  "dependencies": {
+    "lighthouse": "^12.2.1",
+    "chrome-launcher": "^1.1.2",
+    "nodemailer": "^6.9.15"
+  }
+}

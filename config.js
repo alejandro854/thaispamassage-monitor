@@ -1,0 +1,81 @@
+// ============================================================================
+//  Monitor de velocidad — thaispamassage.es
+//  Configuración central. Edita aquí páginas, umbrales y destinatarios.
+// ============================================================================
+
+export const SITE_NAME = 'Thai Spa Massage';
+export const SITE_URL  = 'https://thaispamassage.es';
+
+// --- Páginas que se miden (en orden de prioridad) --------------------------
+export const PAGES = [
+  { key: 'home',   name: 'Inicio',              url: 'https://thaispamassage.es/' },
+  { key: 'masaje', name: 'Ficha de masaje',     url: 'https://thaispamassage.es/masaje-tailandes/' },
+  { key: 'regala', name: 'Elegir masaje (regalo)', url: 'https://thaispamassage.es/regala-thai-spa-massage/' },
+];
+
+// --- Perfiles de medición ---------------------------------------------------
+// Móvil "5G realista": red rápida (como pidió el cliente) + CPU de móvil de gama media.
+// Así los números reflejan al usuario real, no la 4G-lenta de laboratorio.
+export const PROFILES = {
+  mobile: {
+    label: 'Móvil (5G)',
+    formFactor: 'mobile',
+    screenEmulation: { mobile: true, width: 390, height: 844, deviceScaleFactor: 2, disabled: false },
+    throttling: { rttMs: 28, throughputKbps: 45000, cpuSlowdownMultiplier: 1.8,
+      requestLatencyMs: 28, downloadThroughputKbps: 45000, uploadThroughputKbps: 15000 },
+    throttlingMethod: 'simulate',
+    emulatedUserAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 ThaiSpaSpeedBot',
+  },
+  desktop: {
+    label: 'Escritorio',
+    formFactor: 'desktop',
+    screenEmulation: { mobile: false, width: 1350, height: 940, deviceScaleFactor: 1, disabled: false },
+    throttling: { rttMs: 20, throughputKbps: 60000, cpuSlowdownMultiplier: 1,
+      requestLatencyMs: 0, downloadThroughputKbps: 60000, uploadThroughputKbps: 20000 },
+    throttlingMethod: 'simulate',
+    emulatedUserAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ThaiSpaSpeedBot',
+  },
+};
+
+// --- Umbrales de ALERTA (zona roja) ----------------------------------------
+// Basados en Core Web Vitals de Google (el estándar). Alerta = rendimiento
+// realmente malo, no un simple "mejorable". Medido en 5G la home va a ~99, así
+// que solo salta si la web se degrada de verdad.
+export const THRESHOLDS = {
+  mobile:  { lcp: 4.0, score: 50 },   // LCP en segundos, score 0-100
+  desktop: { lcp: 2.5, score: 50 },
+};
+
+// Nº de mediciones seguidas en rojo antes de avisar (evita falsas alarmas por
+// el ruido normal de Lighthouse). Con cron horario = ~2 horas malas seguidas.
+export const ALERT_AFTER = 2;
+
+// Nº de pasadas por medición (se coge la mediana → menos ruido).
+export const RUNS_PER_CHECK = 2;
+
+// --- Destinatarios de las alertas ------------------------------------------
+// ROLLOUT PROGRESIVO: empieza solo Alejandro. Cuando valide, descomenta Javier.
+// Cuando Javier valide, descomenta el cliente.
+export const RECIPIENTS = [
+  'alejandro@dorica.agency',
+  // 'javier@dorica.agency',      // añadir cuando Alejandro dé el OK
+  // 'kiapapa2000@gmail.com',     // añadir cuando Javier dé el OK
+];
+
+// Marca en el User-Agent para que el bot NO cuente como visita real
+// (excluir en GA4 por este texto). Ver README.
+export const BOT_UA_MARKER = 'ThaiSpaSpeedBot';
+
+// --- SMTP (se leen de variables de entorno / GitHub Secrets) ---------------
+export const SMTP = {
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: String(process.env.SMTP_SECURE || 'false') === 'true', // true si puerto 465
+  user: process.env.SMTP_USER,
+  pass: process.env.SMTP_PASS,
+  from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  fromName: 'Monitor Thai Spa Massage',
+};
+
+export const HISTORY_FILE = 'data/history.json'; // estado + últimas mediciones
+export const CSV_FILE      = 'data/history.csv';  // registro completo ("datos, no opiniones")

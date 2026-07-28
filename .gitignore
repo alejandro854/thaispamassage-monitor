@@ -1,0 +1,10 @@
+node_modules/
+.env
+preview-*.html
+preview-*.png
+lh-*.mjs
+calib*.txt
+*.log
+run-test*.txt
+test-send.mjs
+debug-*.mjs
