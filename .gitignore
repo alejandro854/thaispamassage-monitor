@@ -13,3 +13,7 @@ gen-preview.mjs
 summary-test.json
 cdp_*.mjs
 *.pid
+/chart.umd.min.js
+/logo.png
+gen-preview*.mjs
+panel-preview.*
