@@ -12,7 +12,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PAGES, PROFILES, THRESHOLDS, ALERT_AFTER, HISTORY_FILE, CSV_FILE } from './config.js';
 import { measure } from './lib/lighthouse.js';
-import { renderEmail, subjectFor, sendEmail } from './lib/email.js';
+import { renderEmail, renderDigest, subjectFor, sendEmail } from './lib/email.js';
+import { updateSummary, weeklyStats } from './lib/summary.js';
 
 const FFS = ['mobile', 'desktop'];
 const nowISO = () => new Date().toISOString();
@@ -96,6 +97,16 @@ async function run({ report = false } = {}) {
   saveHistory(h);
   appendCSV(csv);
 
+  // --- Resumen para el panel de WordPress ---
+  const events = [
+    ...newAlerts.map(a => ({ type: 'alert', page: a.pageName, profile: a.profileLabel, detail: a.detail })),
+    ...recoveries.map(a => ({ type: 'recovery', page: a.pageName, profile: a.profileLabel, detail: a.detail })),
+  ];
+  const alertingList = [];
+  for (const pg of PAGES) for (const ff of FFS)
+    if (h.targets[`${pg.key}:${ff}`]?.alerting) alertingList.push({ pageName: pg.name, profileLabel: PROFILES[ff].label });
+  updateSummary(byPage, { alerting: alertingList, events, ts });
+
   // --- Emails ---
   const sent = [];
   if (newAlerts.length) {
@@ -143,9 +154,33 @@ function preview() {
       alerts: [ { pageName: 'Inicio', profileLabel: 'Móvil (5G)', detail: '99 · LCP 1.85s' } ] })],
   ];
   for (const [name, html] of files) { fs.writeFileSync(name, html); console.log('  generado', name); }
+  // Resumen semanal de ejemplo
+  const perDay = [
+    { date: '2026-07-21', mobile: 98, desktop: 88, down: 0 },
+    { date: '2026-07-22', mobile: 99, desktop: 90, down: 0 },
+    { date: '2026-07-23', mobile: 97, desktop: 86, down: 0 },
+    { date: '2026-07-24', mobile: 95, desktop: 84, down: 2 },
+    { date: '2026-07-25', mobile: 99, desktop: 91, down: 0 },
+    { date: '2026-07-26', mobile: 98, desktop: 89, down: 0 },
+    { date: '2026-07-27', mobile: 99, desktop: 90, down: 0 },
+  ];
+  fs.writeFileSync('preview-digest.html', renderDigest({ perDay, uptime: 99.7, timestamp: stamp(),
+    alerts: [ { type: 'alert', page: 'Finalizar compra', profile: 'Móvil (5G)', detail: 'servidor lento 8.2s', ts: '2026-07-24T15:00:00Z' },
+              { type: 'recovery', page: 'Finalizar compra', profile: 'Móvil (5G)', detail: 'recuperado', ts: '2026-07-24T17:00:00Z' } ] }));
+  console.log('  generado preview-digest.html');
+}
+
+// --- Resumen semanal por email ----------------------------------------------
+async function digest() {
+  const w = weeklyStats();
+  if (!w || !w.perDay.length) { console.log('Sin datos suficientes para el resumen semanal.'); return; }
+  const html = renderDigest({ ...w, timestamp: stamp() });
+  await sendEmail({ subject: subjectFor('digest'), html });
+  console.log('✉️  Resumen semanal enviado.');
 }
 
 // --- Entry point ------------------------------------------------------------
 const arg = process.argv[2];
 if (arg === '--preview') preview();
+else if (arg === '--digest') digest().catch(e => { console.error('ERROR:', e.message); process.exit(1); });
 else run({ report: arg === '--report' }).catch(e => { console.error('ERROR:', e.message); process.exit(1); });

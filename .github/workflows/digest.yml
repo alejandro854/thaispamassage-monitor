@@ -1,0 +1,29 @@
+name: Resumen semanal
+
+on:
+  schedule:
+    - cron: '0 6 * * 5'   # viernes 06:00 UTC (~08:00 en España; en invierno 07:00)
+  workflow_dispatch:        # permite enviarlo a mano
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Enviar resumen semanal
+        env:
+          SMTP_HOST:   ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:   ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER:   ${{ secrets.SMTP_USER }}
+          SMTP_PASS:   ${{ secrets.SMTP_PASS }}
+          SMTP_FROM:   ${{ secrets.SMTP_FROM }}
+        run: node monitor.js --digest
