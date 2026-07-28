@@ -29,9 +29,9 @@
       "alerting": false
     },
     "checkout:desktop": {
-      "consecutiveBad": 1,
+      "consecutiveBad": 0,
       "alerting": false
     }
   },
-  "lastRun": "2026-07-28T12:06:35.824Z"
+  "lastRun": "2026-07-28T14:19:01.673Z"
 }
