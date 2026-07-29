@@ -25,13 +25,13 @@
       "alerting": false
     },
     "checkout:mobile": {
-      "consecutiveBad": 1,
+      "consecutiveBad": 0,
       "alerting": false
     },
     "checkout:desktop": {
-      "consecutiveBad": 1,
+      "consecutiveBad": 0,
       "alerting": false
     }
   },
-  "lastRun": "2026-07-29T08:50:58.479Z"
+  "lastRun": "2026-07-29T11:33:36.781Z"
 }
