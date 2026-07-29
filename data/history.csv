@@ -133,3 +133,11 @@ timestamp,pagina,dispositivo,score,lcp_s,fcp_s,tbt_ms,cls,speedindex_s,caida
 2026-07-29T20:19:19.967Z,Elegir masaje (regalo),Escritorio,92,1.26,0.98,20,0.024,2.06,0.19,0
 2026-07-29T20:19:19.967Z,Finalizar compra,Móvil (5G),87,1.19,1.14,456,0.001,3.64,2.49,0
 2026-07-29T20:19:19.967Z,Finalizar compra,Escritorio,67,1.37,0.98,58,0.43,3.48,2.28,0
+2026-07-29T22:07:11.786Z,Inicio,Móvil (5G),93,1.19,1.01,306,0.001,1.45,0.17,0
+2026-07-29T22:07:11.786Z,Inicio,Escritorio,95,1.18,1.01,36,0.002,1.36,0.17,0
+2026-07-29T22:07:11.786Z,Ficha de masaje,Móvil (5G),89,2.34,1.06,382,0,1.51,0.17,0
+2026-07-29T22:07:11.786Z,Ficha de masaje,Escritorio,96,1.07,0.97,21,0.002,1.42,0.17,0
+2026-07-29T22:07:11.786Z,Elegir masaje (regalo),Móvil (5G),88,1.25,0.97,462,0.062,2.32,0.1,0
+2026-07-29T22:07:11.786Z,Elegir masaje (regalo),Escritorio,94,1.15,0.93,28,0.024,1.86,0.17,0
+2026-07-29T22:07:11.786Z,Finalizar compra,Móvil (5G),85,1.02,1.02,553,0.001,3.38,2.69,0
+2026-07-29T22:07:11.786Z,Finalizar compra,Escritorio,67,1.37,1.02,54,0.453,3.05,2.54,0
