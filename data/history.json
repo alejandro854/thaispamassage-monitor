@@ -25,7 +25,7 @@
       "alerting": false
     },
     "checkout:mobile": {
-      "consecutiveBad": 1,
+      "consecutiveBad": 0,
       "alerting": false
     },
     "checkout:desktop": {
@@ -33,5 +33,5 @@
       "alerting": false
     }
   },
-  "lastRun": "2026-08-03T13:54:26.452Z"
+  "lastRun": "2026-08-03T16:35:48.111Z"
 }
