@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Monitor de disponibilidad
  * Description: Panel de disponibilidad y velocidad de thaispamassage.es. Los datos los genera el Monitor dorica (servidor propio de dorica.agency, comprueba cada 5 min sin depender de servicios externos).
- * Version:     2.0.0
+ * Version:     2.1.0
  * Author:      dorica.agency
  * Author URI:  https://dorica.agency/
  */
@@ -15,6 +15,11 @@ define('TSM_MON_LOGO',      'https://thaispamassage.es/wp-content/uploads/2022/0
 add_action('admin_menu', function () {
     add_menu_page('Monitorización', 'Monitorización', 'manage_options',
         'tsm-monitor', 'tsm_mon_render_page', 'dashicons-chart-area', 58);
+});
+
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ($hook !== 'toplevel_page_tsm-monitor') return;
+    wp_enqueue_script('tsm-chartjs', plugins_url('chart.umd.min.js', __FILE__), array(), '4.4.4', true);
 });
 
 function tsm_mon_get_data($force = false) {
@@ -77,6 +82,14 @@ function tsm_mon_render_page() {
     .tsm-log .cat{color:#a0926a;font-size:11px}
     .tsm-foot{margin-top:20px;color:#a3a3a3;font-size:12px}
     .tsm-foot a{color:var(--gold)}
+    /* Panel de tendencia */
+    .tsm-panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 22px 16px;margin:22px 0 6px}
+    .tsm-panelhead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+    .tsm-panelhead h2{margin:0;font-size:16px}
+    .tsm-seg{display:inline-flex;background:#f3f1ea;border-radius:10px;padding:3px;gap:2px}
+    .tsm-seg button{border:0;background:transparent;padding:6px 15px;border-radius:8px;font-size:12.5px;font-weight:600;color:#6b7280;cursor:pointer;transition:.2s}
+    .tsm-seg button.on{background:#fff;color:#1f2430;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .tsm-note{font-size:11.5px;color:#9ca3af;margin:10px 2px 0}
     </style>
 
     <div class="wrap tsm-mon">
@@ -144,6 +157,17 @@ function tsm_mon_render_page() {
     }
     echo '</div>';
 
+    // --- GRÁFICA DE TENDENCIA (últimos días) ---
+    $daily = isset($d['daily']) ? $d['daily'] : array();
+    if (count($daily) >= 2) {
+        echo '<div class="tsm-panel anim">';
+        echo '<div class="tsm-panelhead"><h2>Tendencia · últimos días</h2>';
+        echo '<div class="tsm-seg" id="tsm-metric"><button type="button" data-v="uptime" class="on">Disponibilidad</button><button type="button" data-v="speed">Velocidad</button></div></div>';
+        echo '<div style="position:relative;height:300px;margin-top:6px"><canvas id="tsm-chart"></canvas></div>';
+        echo '<div class="tsm-note" id="tsm-note"></div>';
+        echo '</div>';
+    }
+
     // --- TABLA: velocidad por página (semana) — fijas + fichas rotadas ---
     echo '<h2 class="sec">Velocidad por página · esta semana</h2>';
     echo '<p class="note">Cada comprobación mide las páginas fijas y 1 ficha al azar de cada una de las 6 categorías. "Veces" = comprobaciones esta semana; "Velocidad media" = tiempo medio de carga.</p>';
@@ -182,4 +206,69 @@ function tsm_mon_render_page() {
 
     echo '<p class="tsm-foot">Informe semanal automático cada viernes por la mañana · comprobación cada 5 min desde el servidor propio de <a href="https://dorica.agency/" target="_blank">dorica.agency</a> (sin servicios externos)</p>';
     echo '</div>';
+
+    // --- JS: contadores animados + gráfica de tendencia ---
+    $chartData = array();
+    foreach ($daily as $x) $chartData[] = array('date' => $x['date'], 'uptime' => $x['uptime'], 'speed' => $x['avg_total']);
+    ?>
+    <script>
+    (function () {
+      // Contador animado en KPIs y tarjetas (respeta decimales y sufijo % o s)
+      function countUp(el) {
+        var m = el.textContent.trim().match(/^(\d+(?:\.\d+)?)(.*)$/); if (!m) return;
+        var target = parseFloat(m[1]), suffix = m[2], dec = (m[1].split('.')[1] || '').length, t0 = null;
+        function step(ts) { if (!t0) t0 = ts; var p = Math.min((ts - t0) / 900, 1); var v = target * (1 - Math.pow(1 - p, 3));
+          el.textContent = (dec ? v.toFixed(dec) : Math.round(v)) + suffix; if (p < 1) requestAnimationFrame(step); }
+        requestAnimationFrame(step);
+      }
+      document.querySelectorAll('.tsm-mon .tsm-kpi .v, .tsm-card .big').forEach(countUp);
+
+      // Gráfica de tendencia
+      var DATA = <?php echo wp_json_encode($chartData); ?>;
+      var canvas = document.getElementById('tsm-chart');
+      if (!canvas || !DATA.length) return;
+      var metric = 'uptime', chart = null;
+      function build() {
+        if (typeof Chart === 'undefined') return;
+        var labels = DATA.map(function (d) { return d.date; });
+        var vals = DATA.map(function (d) { return metric === 'uptime' ? d.uptime : d.speed; });
+        var col = metric === 'uptime' ? '#16a34a' : '#a99367';
+        var ctx = canvas.getContext('2d');
+        var g = ctx.createLinearGradient(0, 0, 0, 280); g.addColorStop(0, col + '33'); g.addColorStop(1, col + '00');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: { labels: labels, datasets: [{ data: vals, borderColor: col, backgroundColor: g, fill: true, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, tension: .35 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false, animation: { duration: 900, easing: 'easeOutQuart' },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: { ticks: { color: '#9ca3af', maxTicksLimit: 8, callback: function (v) { return new Date(labels[v]).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); } }, grid: { display: false } },
+              y: metric === 'uptime'
+                ? { min: Math.max(0, Math.min(95, Math.floor(Math.min.apply(null, vals)))), max: 100, grid: { color: 'rgba(0,0,0,.05)' }, ticks: { color: '#9ca3af', callback: function (v) { return v + '%'; } } }
+                : { min: 0, grid: { color: 'rgba(0,0,0,.05)' }, ticks: { color: '#9ca3af', callback: function (v) { return v + 's'; } } }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { backgroundColor: '#1e1e1e', padding: 12, cornerRadius: 10, titleColor: '#e7c98a',
+                callbacks: {
+                  title: function (it) { return new Date(it[0].label).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); },
+                  label: function (it) { return metric === 'uptime' ? ('Disponibilidad: ' + it.parsed.y + '%') : ('Velocidad media: ' + it.parsed.y + 's'); }
+                } }
+            }
+          }
+        });
+        var note = document.getElementById('tsm-note');
+        if (note) note.textContent = metric === 'uptime' ? 'Porcentaje de comprobaciones sin incidencia por día (más alto = mejor).' : 'Tiempo medio de carga por día (más bajo = mejor).';
+      }
+      document.querySelectorAll('#tsm-metric button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          b.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); });
+          b.classList.add('on'); metric = b.dataset.v; build();
+        });
+      });
+      if (document.readyState !== 'loading') build(); else document.addEventListener('DOMContentLoaded', build);
+    })();
+    </script>
+    <?php
 }
