@@ -95,7 +95,9 @@ function evaluate($r, $pol, $ttfbLimit, $severe) {
   elseif ($noResp && $down) $detail = 'no responde / caída';
   elseif ($slow)            $detail = "servidor lento: {$r['ttfb']}s en responder";
   else                      $detail = "OK ({$r['code']}, {$r['ttfb']}s)";
-  return ['bad' => $bad, 'grave' => $grave, 'down' => ($is5xx || $noResp), 'detail' => $detail];
+  // 'down' (incidencia para estadística/uptime) = fallo REAL según la política, igual que los avisos:
+  // 5xx siempre; sin respuesta solo cuenta en páginas core (checkout/fichas lentos no son caídas).
+  return ['bad' => $bad, 'grave' => $grave, 'down' => $down, 'detail' => $detail];
 }
 
 function sendMail($to, $subject, $html, $from) {
@@ -189,8 +191,8 @@ function tsm_week_table($rows) {
      . '<td width="17%" align="center" style="padding:0 4px 8px;">Velocidad</td>'
      . '<td width="12%" align="center" style="padding:0 4px 8px;">Inci.</td></tr>';
   foreach ($rows as $u) {
-    $ok    = max(1, $u['count'] - $u['down']);
-    $avgT  = round($u['total_sum'] / $ok, 2);
+    $ns    = max(1, $u['nspeed'] ?? max(1, $u['count'] - $u['down']));
+    $avgT  = round($u['total_sum'] / $ns, 2);
     $cat   = $u['cat'] ? '<span style="color:#b99a5b;font-size:11px;"> · ' . htmlspecialchars($u['cat']) . '</span>' : '';
     $h .= '<tr>'
       . '<td width="58%" style="padding:11px 4px;border-top:1px solid #f0ebe0;word-break:break-word;"><b style="color:#2a2620;">' . htmlspecialchars($u['name']) . '</b>' . $cat . '</td>'
@@ -253,9 +255,9 @@ if ($PANEL) {
       'alerting' => !empty($st['alerting']), 'ts' => $st['ts'] ?? null];
   }
   foreach ($stats['urls'] as $url => $u) {
-    $ok = max(1, $u['count'] - $u['down']); $checks += $u['count']; $inc += $u['down'];
+    $ns = max(1, $u['nspeed'] ?? max(1, $u['count'] - $u['down'])); $checks += $u['count']; $inc += $u['down'];
     $week[] = ['name' => $u['name'], 'cat' => $u['cat'], 'url' => $url, 'count' => $u['count'], 'down' => $u['down'],
-      'avg_ttfb' => round($u['ttfb_sum'] / $ok, 2), 'avg_total' => round($u['total_sum'] / $ok, 2)];
+      'avg_ttfb' => round($u['ttfb_sum'] / $ns, 2), 'avg_total' => round($u['total_sum'] / $ns, 2)];
   }
   $daily = [];
   $dd = $stats['daily'] ?? []; ksort($dd);
@@ -324,11 +326,13 @@ foreach ($targets as $t) {
   }
   $state[$url] = $st;
 
-  // Estadística de la semana. Solo sumamos velocidad de mediciones válidas.
-  $s = $stats['urls'][$url] ?? ['name' => $t['name'], 'cat' => $t['cat'], 'count' => 0, 'down' => 0, 'ttfb_sum' => 0, 'total_sum' => 0];
+  // Estadística de la semana. 'down' = incidencia real (política); la velocidad solo suma
+  // cuando hubo respuesta válida (2xx/3xx) — un timeout no infla la media ni cuenta como caída.
+  $measured = ($r['code'] >= 200 && $r['code'] < 400);
+  $s = $stats['urls'][$url] ?? ['name' => $t['name'], 'cat' => $t['cat'], 'count' => 0, 'down' => 0, 'nspeed' => 0, 'ttfb_sum' => 0, 'total_sum' => 0];
   $s['name'] = $t['name']; $s['cat'] = $t['cat']; $s['count']++;
   if ($ev['down']) $s['down']++;
-  else { $s['ttfb_sum'] += $r['ttfb']; $s['total_sum'] += $r['total']; }
+  if ($measured) { $s['ttfb_sum'] += $r['ttfb']; $s['total_sum'] += $r['total']; $s['nspeed'] = ($s['nspeed'] ?? 0) + 1; }
   $stats['urls'][$url] = $s;
 
   // Serie diaria (30 días) para el gráfico de tendencia del panel. NO se resetea con el informe semanal.
@@ -336,7 +340,7 @@ foreach ($targets as $t) {
   $db = $stats['daily'][$day] ?? ['checks' => 0, 'inc' => 0, 'ttfb_sum' => 0, 'total_sum' => 0, 'n' => 0];
   $db['checks']++;
   if ($ev['down']) $db['inc']++;
-  else { $db['ttfb_sum'] += $r['ttfb']; $db['total_sum'] += $r['total']; $db['n']++; }
+  if ($measured) { $db['ttfb_sum'] += $r['ttfb']; $db['total_sum'] += $r['total']; $db['n']++; }
   $stats['daily'][$day] = $db;
 
   $report[] = sprintf('%-24s HTTP %d · TTFB %ss · %s', $t['name'], $r['code'], $r['ttfb'], $ev['detail']);
