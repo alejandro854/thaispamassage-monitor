@@ -67,8 +67,9 @@ export const RUNS_PER_CHECK = 2;
 // Cuando Javier valide, descomenta el cliente.
 export const RECIPIENTS = [
   'alejandro@dorica.agency',
-  // 'javier@dorica.agency',      // añadir cuando Alejandro dé el OK
-  // 'kiapapa2000@gmail.com',     // añadir cuando Javier dé el OK
+  'jordi@dorica.agency',
+  'javier@dorica.agency',
+  // 'kiapapa2000@gmail.com',     // añadir cuando el equipo valide (cliente)
 ];
 
 // Marca en el User-Agent para que el bot NO cuente como visita real
