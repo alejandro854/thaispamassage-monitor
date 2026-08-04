@@ -194,6 +194,25 @@ function tsm_mon_render_page() {
         echo '</tbody></table>';
     }
 
+    // --- FICHAS DE MASAJE (rotación por categoría) ---
+    $mass = isset($d['massages']) ? $d['massages'] : array();
+    if (!empty($mass)) {
+        echo '<h2 class="sec">Fichas de masaje · rotación por categoría</h2>';
+        echo '<p style="color:#6b7280;font-size:13px;margin:-4px 0 10px;">Cada medición comprueba 1 masaje al azar de cada categoría. Veces escaneada y medias de los últimos 7 días.</p>';
+        echo '<table class="tsm-log"><thead><tr><th>Categoría</th><th>Página</th><th>Veces</th><th>Móvil (score·LCP)</th><th>Escrit. (score·LCP)</th></tr></thead><tbody>';
+        foreach ($mass as $m) {
+            $u = str_replace('https://thaispamassage.es', '', isset($m['url']) ? $m['url'] : '');
+            $mob  = (isset($m['mob'])  && $m['mob'])  ? ($m['mob']['score']  . ' · ' . $m['mob']['lcp']  . 's') : '—';
+            $desk = (isset($m['desk']) && $m['desk']) ? ($m['desk']['score'] . ' · ' . $m['desk']['lcp'] . 's') : '—';
+            echo '<tr><td>' . esc_html(isset($m['category']) ? $m['category'] : '') . '</td>'
+                . '<td><a href="' . esc_url(isset($m['url']) ? $m['url'] : '#') . '" target="_blank">' . esc_html($u) . '</a></td>'
+                . '<td style="font-weight:800;">' . intval(isset($m['scans']) ? $m['scans'] : 0) . '</td>'
+                . '<td>' . esc_html($mob) . '</td>'
+                . '<td>' . esc_html($desk) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+
     echo '<p class="tsm-foot">Medido cada hora con Google Lighthouse (móvil 5G y escritorio) · <a href="' . esc_url(TSM_MON_CSV_URL) . '" target="_blank">descargar datos (CSV)</a> · desarrollado por <a href="https://dorica.agency/" target="_blank">dorica.agency</a></p>';
     echo '</div>';
 
