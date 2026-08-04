@@ -133,11 +133,11 @@ function tsm_shell($preheader, $label, $title, $sub, $accent, $body) {
 function tsm_row($name, $url, $detail, $color, $dot) {
   $path = htmlspecialchars(str_replace('https://thaispamassage.es', '', $url));
   return '<tr>'
-    . '<td style="padding:13px 4px;border-top:1px solid #f0ebe0;vertical-align:middle;">'
-    . '<span style="color:' . $color . ';font-size:15px;vertical-align:middle;">' . $dot . '</span> '
+    . '<td width="58%" style="padding:13px 4px;border-top:1px solid #f0ebe0;vertical-align:top;word-break:break-word;">'
+    . '<span style="color:' . $color . ';font-size:15px;">' . $dot . '</span> '
     . '<b style="color:#2a2620;font-size:14px;">' . htmlspecialchars($name) . '</b>'
     . '<div style="color:#a49a86;font-size:11px;margin:2px 0 0 18px;">' . ($path === '' ? '/' : $path) . '</div></td>'
-    . '<td align="right" style="padding:13px 4px;border-top:1px solid #f0ebe0;vertical-align:middle;color:' . $color . ';font-size:13px;font-weight:bold;white-space:nowrap;">' . htmlspecialchars($detail) . '</td>'
+    . '<td width="42%" align="right" style="padding:13px 4px;border-top:1px solid #f0ebe0;vertical-align:top;color:' . $color . ';font-size:13px;font-weight:bold;word-break:break-word;">' . htmlspecialchars($detail) . '</td>'
     . '</tr>';
 }
 
@@ -162,7 +162,7 @@ function alertHtml($rows, $ok) {
     $dot    = '&#9679;';
   }
   $tbl = '<p style="margin:22px 0 4px;color:#6b6456;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">' . $head . '</p>'
-       . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">';
+       . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;">';
   foreach ($rows as $r) $tbl .= tsm_row($r['name'], $r['url'], $r['detail'], $accent, $dot);
   $tbl .= '</table>';
   return tsm_shell(($ok ? 'La web ha vuelto a la normalidad' : 'Incidencia detectada en la web'),
@@ -182,21 +182,21 @@ function tsm_kpi($value, $label, $color) {
 // Tabla de páginas del informe (cabecera + filas con velocidad media coloreada).
 function tsm_week_table($rows) {
   $speedColor = function ($s) { return $s <= 1.5 ? '#2f7d54' : ($s <= 4 ? '#c07c1e' : '#c0392b'); };
-  $h = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">'
+  $h = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;font-size:13px;">'
      . '<tr style="color:#a49a86;font-size:10px;text-transform:uppercase;letter-spacing:.6px;">'
-     . '<td style="padding:0 4px 8px;">Página</td>'
-     . '<td align="center" style="padding:0 4px 8px;">Veces</td>'
-     . '<td align="center" style="padding:0 4px 8px;">Velocidad</td>'
-     . '<td align="center" style="padding:0 4px 8px;">Inci.</td></tr>';
+     . '<td width="58%" style="padding:0 4px 8px;">Página</td>'
+     . '<td width="13%" align="center" style="padding:0 4px 8px;">Veces</td>'
+     . '<td width="17%" align="center" style="padding:0 4px 8px;">Velocidad</td>'
+     . '<td width="12%" align="center" style="padding:0 4px 8px;">Inci.</td></tr>';
   foreach ($rows as $u) {
     $ok    = max(1, $u['count'] - $u['down']);
     $avgT  = round($u['total_sum'] / $ok, 2);
     $cat   = $u['cat'] ? '<span style="color:#b99a5b;font-size:11px;"> · ' . htmlspecialchars($u['cat']) . '</span>' : '';
     $h .= '<tr>'
-      . '<td style="padding:11px 4px;border-top:1px solid #f0ebe0;"><b style="color:#2a2620;">' . htmlspecialchars($u['name']) . '</b>' . $cat . '</td>'
-      . '<td align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:#6b6456;font-weight:bold;">' . intval($u['count']) . '</td>'
-      . '<td align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:' . $speedColor($avgT) . ';font-weight:bold;">' . $avgT . 's</td>'
-      . '<td align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:' . ($u['down'] ? '#c0392b' : '#c9c1af') . ';font-weight:bold;">' . intval($u['down']) . '</td></tr>';
+      . '<td width="58%" style="padding:11px 4px;border-top:1px solid #f0ebe0;word-break:break-word;"><b style="color:#2a2620;">' . htmlspecialchars($u['name']) . '</b>' . $cat . '</td>'
+      . '<td width="13%" align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:#6b6456;font-weight:bold;">' . intval($u['count']) . '</td>'
+      . '<td width="17%" align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:' . $speedColor($avgT) . ';font-weight:bold;">' . $avgT . 's</td>'
+      . '<td width="12%" align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:' . ($u['down'] ? '#c0392b' : '#c9c1af') . ';font-weight:bold;">' . intval($u['down']) . '</td></tr>';
   }
   return $h . '</table>';
 }
