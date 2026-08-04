@@ -10,7 +10,7 @@
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { PAGES, PROFILES, THRESHOLDS, ALERT_AFTER, SEVERE_TTFB, HISTORY_FILE, CSV_FILE } from './config.js';
+import { PAGES, PROFILES, THRESHOLDS, ALERT_AFTER, SEVERE_TTFB, HISTORY_FILE, CSV_FILE, MASSAGE_CATEGORIES, SITE_URL } from './config.js';
 import { measure } from './lib/lighthouse.js';
 import { renderEmail, renderDigest, subjectFor, sendEmail } from './lib/email.js';
 import { updateSummary, weeklyStats } from './lib/summary.js';
@@ -46,10 +46,21 @@ function evaluate(res, ff, page) {
   return { bad: false, severe: false, detail: `${res.score} · LCP ${res.lcp}s` };
 }
 
-// --- Medición de todas las páginas ------------------------------------------
-async function measureAll() {
+// Elige 1 masaje AL AZAR de cada categoría -> 6 fichas por ejecución (rotan cada vez).
+function pickMassageTargets() {
+  const pretty = s => s.replace(/^promo\//, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const out = [];
+  for (const [cat, slugs] of Object.entries(MASSAGE_CATEGORIES)) {
+    const slug = slugs[Math.floor(Math.random() * slugs.length)];
+    out.push({ key: `m:${slug}`, name: `Masaje ${cat}`, url: `${SITE_URL}/${slug}/`, category: cat, massage: true });
+  }
+  return out;
+}
+
+// --- Medición de una lista de objetivos (páginas fijas + masajes del día) ----
+async function measureAll(targets) {
   const byPage = {};
-  for (const pg of PAGES) {
+  for (const pg of targets) {
     byPage[pg.key] = {};
     for (const ff of FFS) {
       process.stderr.write(`  midiendo ${pg.name} · ${PROFILES[ff].label}... `);
@@ -63,14 +74,15 @@ async function measureAll() {
 
 // --- Ejecución principal ----------------------------------------------------
 async function run({ report = false } = {}) {
-  const byPage = await measureAll();
+  const targets = [...PAGES, ...pickMassageTargets()];   // fijas + 6 masajes al azar (1/categoría)
+  const byPage = await measureAll(targets);
   const h = loadHistory();
   h.targets = h.targets || {};
 
   const newAlerts = [], recoveries = [], csv = [];
   const ts = nowISO();
 
-  for (const pg of PAGES) {
+  for (const pg of targets) {
     for (const ff of FFS) {
       const res = byPage[pg.key][ff];
       const id = `${pg.key}:${ff}`;
@@ -106,9 +118,9 @@ async function run({ report = false } = {}) {
     ...recoveries.map(a => ({ type: 'recovery', page: a.pageName, profile: a.profileLabel, detail: a.detail })),
   ];
   const alertingList = [];
-  for (const pg of PAGES) for (const ff of FFS)
+  for (const pg of targets) for (const ff of FFS)
     if (h.targets[`${pg.key}:${ff}`]?.alerting) alertingList.push({ pageName: pg.name, profileLabel: PROFILES[ff].label });
-  updateSummary(byPage, { alerting: alertingList, events, ts });
+  updateSummary(byPage, { alerting: alertingList, events, ts, targets });
 
   // --- Emails ---
   const sent = [];
@@ -167,7 +179,16 @@ function preview() {
     { date: '2026-07-26', mobile: 98, desktop: 89, down: 0 },
     { date: '2026-07-27', mobile: 99, desktop: 90, down: 0 },
   ];
-  fs.writeFileSync('preview-digest.html', renderDigest({ perDay, uptime: 99.7, timestamp: stamp(),
+  const massages = [
+    { category: 'Tailandeses', url: 'https://thaispamassage.es/masaje-tailandes/', scans: 4, mob: { score: 92, lcp: 2.1 }, desk: { score: 89, lcp: 1.5 } },
+    { category: 'Tailandeses', url: 'https://thaispamassage.es/masaje-aromatico/', scans: 2, mob: { score: 90, lcp: 2.3 }, desk: { score: 88, lcp: 1.6 } },
+    { category: 'Combinados', url: 'https://thaispamassage.es/bano-y-masaje/', scans: 3, mob: { score: 91, lcp: 2.2 }, desk: { score: 90, lcp: 1.5 } },
+    { category: 'En pareja', url: 'https://thaispamassage.es/masaje-en-pareja/', scans: 5, mob: { score: 88, lcp: 2.5 }, desk: { score: 87, lcp: 1.7 } },
+    { category: 'Belleza (cara y cuerpo)', url: 'https://thaispamassage.es/masaje-facial/', scans: 3, mob: { score: 93, lcp: 2.0 }, desk: { score: 91, lcp: 1.4 } },
+    { category: 'Embarazadas', url: 'https://thaispamassage.es/mother-thai-massage/', scans: 4, mob: { score: 90, lcp: 2.2 }, desk: { score: 89, lcp: 1.5 } },
+    { category: 'Masaje + menú', url: 'https://thaispamassage.es/promo/promocion-kasa/', scans: 2, mob: { score: 86, lcp: 2.6 }, desk: { score: 85, lcp: 1.8 } },
+  ];
+  fs.writeFileSync('preview-digest.html', renderDigest({ perDay, uptime: 99.7, timestamp: stamp(), massages,
     alerts: [ { type: 'alert', page: 'Finalizar compra', profile: 'Móvil (5G)', detail: 'servidor lento 8.2s', ts: '2026-07-24T15:00:00Z' },
               { type: 'recovery', page: 'Finalizar compra', profile: 'Móvil (5G)', detail: 'recuperado', ts: '2026-07-24T17:00:00Z' } ] }));
   console.log('  generado preview-digest.html');

@@ -6,10 +6,9 @@
 export const SITE_NAME = 'Thai Spa Massage';
 export const SITE_URL  = 'https://thaispamassage.es';
 
-// --- Páginas que se miden (en orden de prioridad) --------------------------
+// --- Páginas FIJAS que se miden siempre ------------------------------------
 export const PAGES = [
   { key: 'home',   name: 'Inicio',              url: 'https://thaispamassage.es/' },
-  { key: 'masaje', name: 'Ficha de masaje',     url: 'https://thaispamassage.es/masaje-tailandes/' },
   { key: 'regala', name: 'Elegir masaje (regalo)', url: 'https://thaispamassage.es/regala-thai-spa-massage/' },
   // Checkout: NO se cachea (por diseño), así que siempre es más lento. La señal
   // clave aquí es el TTFB (tiempo de servidor). Con el carrito vacío redirige a
@@ -21,6 +20,18 @@ export const PAGES = [
       desktop: { lcp: 5.0, score: 35, ttfb: 6.0 },
     } },
 ];
+
+// --- Fichas de masaje por CATEGORÍA -----------------------------------------
+// Cada ejecución se mide 1 masaje AL AZAR de cada una de las 6 categorías (6 fichas).
+// En el informe semanal se lista cada URL con las veces escaneada y sus medias.
+export const MASSAGE_CATEGORIES = {
+  'Tailandeses':       ['masaje-tailandes','masaje-aromatico','masaje-balines','masaje-sueco','masaje-relajante-de-hierbas','masaje-lomi-lomi','masaje-cuatro-manos'],
+  'Combinados':        ['masaje-ritual','bano-y-masaje','cabeza-y-masaje-cuerpo'],
+  'En pareja':         ['masaje-en-pareja','masaje-jacuzzi-en-pareja','masaje-deluxe-parejas'],
+  'Belleza (cara y cuerpo)': ['masaje-facial','masaje-body-scrub','face-spa-massage'],
+  'Embarazadas':       ['mother-thai-massage','masaje-pies-embarazadas','head-mother-massage'],
+  'Masaje + menú':     ['promo/promocion-kasa','promo/promocion-thai-gracia','promocion-comida-cena'],
+};
 
 // --- Perfiles de medición ---------------------------------------------------
 // Móvil "5G realista": red rápida (como pidió el cliente) + CPU de móvil de gama media.
