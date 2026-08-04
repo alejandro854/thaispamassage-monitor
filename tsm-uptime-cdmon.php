@@ -51,6 +51,7 @@ $REPORT_HOUR = 9;      // hora a partir de la cual se envía (mañana)
 $RECIPIENTS  = ['alejandro@dorica.agency', 'jordi@dorica.agency', 'javier@dorica.agency'];
 $FROM        = 'Monitor Thai Spa <monitor@dorica.agency>';
 $UA          = 'DoricaUptimeBot/1.0 (+https://dorica.agency)';
+$LOGO        = 'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaispamassage.png';
 $TOKEN       = 'tsm_dorica_9f3k7q2x';
 $STATE_FILE  = __DIR__ . '/.tsm-uptime-state.json';   // estado + última lectura por URL
 $STATS_FILE  = __DIR__ . '/.tsm-uptime-stats.json';   // acumulado de la semana + registro de alertas
@@ -61,9 +62,9 @@ if (PHP_SAPI !== 'cli' && (($_GET['key'] ?? '') !== $TOKEN)) { http_response_cod
 ignore_user_abort(true);   // si el cron por URL corta la conexión (web saturada), el script termina igual y envía la alerta
 @set_time_limit(300);
 
-$DRY    = (PHP_SAPI !== 'cli' && (($_GET['dry'] ?? '') === '1'));      // comprueba pero NO envía ni guarda
-$WEEKLY = (PHP_SAPI !== 'cli' && (($_GET['weekly'] ?? '') === '1'));   // fuerza el informe semanal (prueba)
-$PANEL  = (PHP_SAPI !== 'cli' && (($_GET['panel'] ?? '') === '1'));    // devuelve JSON para el panel de WordPress
+$DRY     = (PHP_SAPI !== 'cli' && (($_GET['dry'] ?? '') === '1'));      // comprueba pero NO envía ni guarda
+$WEEKLY  = (PHP_SAPI !== 'cli' && (($_GET['weekly'] ?? '') === '1'));   // fuerza el informe semanal (prueba)
+$PANEL   = (PHP_SAPI !== 'cli' && (($_GET['panel'] ?? '') === '1'));    // devuelve JSON para el panel de WordPress
 
 // ------------------------- FUNCIONES -------------------------
 function check($url, $timeout, $ua) {
@@ -102,18 +103,102 @@ function sendMail($to, $subject, $html, $from) {
   @mail(implode(',', $to), '=?UTF-8?B?' . base64_encode($subject) . '?=', $html, $headers);
 }
 
+// Plantilla base de email (segura para todos los clientes: tablas + estilos inline + logo Thai).
+function tsm_shell($preheader, $label, $title, $sub, $accent, $body) {
+  $logo = 'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaispamassage.png';
+  return
+    '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f2ede3;font-size:1px;line-height:1px;">' . htmlspecialchars($preheader) . '</div>'
+  . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f2ede3;margin:0;padding:28px 12px;font-family:Helvetica,Arial,sans-serif;">'
+  . '<tr><td align="center">'
+  . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(30,25,15,.14);">'
+  . '<tr><td align="center" style="background-color:#201c16;background-image:linear-gradient(135deg,#2b261d,#16130e);padding:32px 32px 26px;">'
+  . '<img src="' . $logo . '" alt="Thai Spa Massage" width="140" style="width:140px;max-width:55%;height:auto;display:block;margin:0 auto 16px;">'
+  . '<div style="color:#c9a86a;font-size:11px;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">' . htmlspecialchars($label) . '</div>'
+  . '<div style="width:34px;height:2px;background-color:#c9a86a;line-height:2px;font-size:0;margin:13px auto;">&nbsp;</div>'
+  . '<div style="color:#ffffff;font-family:Georgia,\'Times New Roman\',serif;font-size:24px;line-height:1.25;">' . htmlspecialchars($title) . '</div>'
+  . ($sub ? '<div style="color:#a99e8a;font-size:13px;margin-top:8px;">' . htmlspecialchars($sub) . '</div>' : '')
+  . '</td></tr>'
+  . '<tr><td style="height:4px;background-color:' . $accent . ';line-height:4px;font-size:0;">&nbsp;</td></tr>'
+  . '<tr><td style="padding:28px 32px;color:#3a352c;font-size:14px;line-height:1.55;">' . $body . '</td></tr>'
+  . '<tr><td style="background-color:#faf7f0;border-top:1px solid #ece5d6;padding:22px 32px;text-align:center;">'
+  . '<div style="color:#8a8272;font-size:12px;line-height:1.6;">Monitorización automática de <b style="color:#6b6456;">thaispamassage.es</b><br>Comprobación cada 5&nbsp;minutos desde servidor propio · sin servicios externos</div>'
+  . '<div style="margin-top:12px;"><a href="https://dorica.agency" style="color:#c9a86a;font-size:11px;letter-spacing:1px;text-transform:uppercase;text-decoration:none;">dorica.agency</a></div>'
+  . '</td></tr>'
+  . '</table>'
+  . '<div style="color:#b3ab99;font-size:11px;margin-top:14px;">Aviso automático para el equipo responsable de la web.</div>'
+  . '</td></tr></table>';
+}
+
+// Fila de página dentro de una tabla de email (nombre + ruta + detalle con color).
+function tsm_row($name, $url, $detail, $color, $dot) {
+  $path = htmlspecialchars(str_replace('https://thaispamassage.es', '', $url));
+  return '<tr>'
+    . '<td style="padding:13px 4px;border-top:1px solid #f0ebe0;vertical-align:middle;">'
+    . '<span style="color:' . $color . ';font-size:15px;vertical-align:middle;">' . $dot . '</span> '
+    . '<b style="color:#2a2620;font-size:14px;">' . htmlspecialchars($name) . '</b>'
+    . '<div style="color:#a49a86;font-size:11px;margin:2px 0 0 18px;">' . ($path === '' ? '/' : $path) . '</div></td>'
+    . '<td align="right" style="padding:13px 4px;border-top:1px solid #f0ebe0;vertical-align:middle;color:' . $color . ';font-size:13px;font-weight:bold;white-space:nowrap;">' . htmlspecialchars($detail) . '</td>'
+    . '</tr>';
+}
+
 function alertHtml($rows, $ok) {
-  $color = $ok ? '#16a34a' : '#dc2626';
-  $title = $ok ? 'Recuperado' : 'Aviso de disponibilidad';
-  $h = '<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;margin:auto">'
-     . '<h2 style="color:' . $color . ';margin:0 0 6px">' . $title . ' — Thai Spa Massage</h2>'
-     . '<p style="color:#555;font-size:13px;margin:0 0 14px">' . date('d/m/Y H:i') . '</p><table style="width:100%;border-collapse:collapse;font-size:14px">';
-  foreach ($rows as $r) {
-    $h .= '<tr><td style="padding:8px 6px;border-top:1px solid #eee"><b>' . htmlspecialchars($r['name']) . '</b><br>'
-       . '<span style="color:#777;font-size:12px">' . htmlspecialchars(str_replace('https://thaispamassage.es', '', $r['url'])) . '</span></td>'
-       . '<td style="padding:8px 6px;border-top:1px solid #eee;color:' . $color . '">' . htmlspecialchars($r['detail']) . '</td></tr>';
+  if ($ok) {
+    $accent = '#2f7d54';
+    $label  = 'Estado de la web';
+    $title  = 'Todo ha vuelto a la normalidad';
+    $intro  = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+            . '<td style="background-color:#eaf5ee;border:1px solid #cfe6d6;border-radius:12px;padding:16px 18px;color:#256b45;font-size:14px;line-height:1.5;">'
+            . '&#10004;&nbsp; <b>La incidencia se ha resuelto.</b> La web ha vuelto a responder con normalidad.</td></tr></table>';
+    $head   = 'Páginas recuperadas';
+    $dot    = '&#10004;';
+  } else {
+    $accent = '#c0392b';
+    $label  = 'Aviso de disponibilidad';
+    $title  = 'La web necesita atención';
+    $intro  = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+            . '<td style="background-color:#fdecea;border:1px solid #f5c6c1;border-radius:12px;padding:16px 18px;color:#a5352b;font-size:14px;line-height:1.5;">'
+            . '&#9888;&nbsp; <b>Se ha detectado una incidencia.</b> Estas páginas no responden con normalidad ahora mismo. El monitor volverá a avisar en cuanto se recupere.</td></tr></table>';
+    $head   = 'Páginas afectadas';
+    $dot    = '&#9679;';
   }
-  return $h . '</table><p style="color:#999;font-size:11px;margin-top:16px">Monitor dorica.agency · comprobación cada 5 min</p></div>';
+  $tbl = '<p style="margin:22px 0 4px;color:#6b6456;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">' . $head . '</p>'
+       . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">';
+  foreach ($rows as $r) $tbl .= tsm_row($r['name'], $r['url'], $r['detail'], $accent, $dot);
+  $tbl .= '</table>';
+  return tsm_shell(($ok ? 'La web ha vuelto a la normalidad' : 'Incidencia detectada en la web'),
+    $label, $title, date('d/m/Y · H:i') . ' h', $accent, $intro . $tbl);
+}
+
+// Una tarjeta KPI (celda de una fila de 3).
+function tsm_kpi($value, $label, $color) {
+  return '<td width="33%" align="center" style="padding:0 5px;" valign="top">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#faf7f0;border:1px solid #efe8d8;border-radius:14px;">'
+    . '<tr><td align="center" style="padding:18px 8px;">'
+    . '<div style="font-family:Georgia,serif;font-size:30px;font-weight:bold;line-height:1;color:' . $color . ';">' . $value . '</div>'
+    . '<div style="color:#9a927f;font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;margin-top:7px;">' . htmlspecialchars($label) . '</div>'
+    . '</td></tr></table></td>';
+}
+
+// Tabla de páginas del informe (cabecera + filas con velocidad media coloreada).
+function tsm_week_table($rows) {
+  $speedColor = function ($s) { return $s <= 1.5 ? '#2f7d54' : ($s <= 4 ? '#c07c1e' : '#c0392b'); };
+  $h = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">'
+     . '<tr style="color:#a49a86;font-size:10px;text-transform:uppercase;letter-spacing:.6px;">'
+     . '<td style="padding:0 4px 8px;">Página</td>'
+     . '<td align="center" style="padding:0 4px 8px;">Veces</td>'
+     . '<td align="center" style="padding:0 4px 8px;">Velocidad</td>'
+     . '<td align="center" style="padding:0 4px 8px;">Inci.</td></tr>';
+  foreach ($rows as $u) {
+    $ok    = max(1, $u['count'] - $u['down']);
+    $avgT  = round($u['total_sum'] / $ok, 2);
+    $cat   = $u['cat'] ? '<span style="color:#b99a5b;font-size:11px;"> · ' . htmlspecialchars($u['cat']) . '</span>' : '';
+    $h .= '<tr>'
+      . '<td style="padding:11px 4px;border-top:1px solid #f0ebe0;"><b style="color:#2a2620;">' . htmlspecialchars($u['name']) . '</b>' . $cat . '</td>'
+      . '<td align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:#6b6456;font-weight:bold;">' . intval($u['count']) . '</td>'
+      . '<td align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:' . $speedColor($avgT) . ';font-weight:bold;">' . $avgT . 's</td>'
+      . '<td align="center" style="padding:11px 4px;border-top:1px solid #f0ebe0;color:' . ($u['down'] ? '#c0392b' : '#c9c1af') . ';font-weight:bold;">' . intval($u['down']) . '</td></tr>';
+  }
+  return $h . '</table>';
 }
 
 function weeklyHtml($from, $to, $urls) {
@@ -121,36 +206,40 @@ function weeklyHtml($from, $to, $urls) {
   $checks = 0; $inc = 0;
   foreach ($urls as $u) { $checks += $u['count']; $inc += $u['down']; }
   $uptime = $checks ? round(100 * ($checks - $inc) / $checks, 2) : 100;
-  $h = '<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:640px;margin:auto">'
-     . '<h2 style="color:#1c1c1c;margin:0 0 4px">Informe semanal — Thai Spa Massage</h2>'
-     . '<p style="color:#666;font-size:13px;margin:0 0 4px">Disponibilidad y velocidad · semana del ' . htmlspecialchars($from) . ' al ' . htmlspecialchars($to) . '</p>'
-     . '<p style="margin:0 0 16px;font-size:14px"><b>' . number_format($uptime, 2) . '%</b> disponibilidad · '
-     . '<b>' . $checks . '</b> comprobaciones · <b style="color:' . ($inc ? '#dc2626' : '#16a34a') . '">' . $inc . '</b> incidencias</p>'
-     . '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-     . '<tr style="text-align:left;color:#888;font-size:11px;text-transform:uppercase">'
-     . '<th style="padding:0 6px 8px">Página</th><th style="padding:0 6px 8px;text-align:center">Revisada</th>'
-     . '<th style="padding:0 6px 8px;text-align:center">Velocidad media</th><th style="padding:0 6px 8px;text-align:center">Servidor (TTFB)</th>'
-     . '<th style="padding:0 6px 8px;text-align:center">Incidencias</th></tr>';
-  foreach ($urls as $u) {
-    $ok    = max(1, $u['count'] - $u['down']);
-    $avgT  = round($u['total_sum'] / $ok, 2);
-    $avgTt = round($u['ttfb_sum'] / $ok, 2);
-    $cat   = $u['cat'] ? '<span style="color:#A0926A;font-size:11px"> · ' . htmlspecialchars($u['cat']) . '</span>' : '';
-    $h .= '<tr><td style="padding:8px 6px;border-top:1px solid #eee"><b>' . htmlspecialchars($u['name']) . '</b>' . $cat . '<br>'
-       . '<span style="color:#999;font-size:11px">' . htmlspecialchars(str_replace('https://thaispamassage.es', '', $u['url'])) . '</span></td>'
-       . '<td style="padding:8px 6px;border-top:1px solid #eee;text-align:center;font-weight:700">' . intval($u['count']) . '</td>'
-       . '<td style="padding:8px 6px;border-top:1px solid #eee;text-align:center">' . $avgT . 's</td>'
-       . '<td style="padding:8px 6px;border-top:1px solid #eee;text-align:center;color:#777">' . $avgTt . 's</td>'
-       . '<td style="padding:8px 6px;border-top:1px solid #eee;text-align:center;color:' . ($u['down'] ? '#dc2626' : '#999') . '">' . intval($u['down']) . '</td></tr>';
+  $upcolor = $uptime >= 99.5 ? '#2f7d54' : ($uptime >= 98 ? '#c07c1e' : '#c0392b');
+
+  $fixed = array_filter($urls, function ($u) { return empty($u['cat']); });
+  $fichas = array_filter($urls, function ($u) { return !empty($u['cat']); });
+
+  $body = '<p style="margin:0 0 20px;color:#6b6456;font-size:14px;line-height:1.55;">Resumen de disponibilidad y velocidad de la web durante la última semana. Todo se comprueba de forma automática cada 5&nbsp;minutos.</p>'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;"><tr>'
+    . tsm_kpi(number_format($uptime, 2) . '<span style="font-size:16px;">%</span>', 'Disponibilidad', $upcolor)
+    . tsm_kpi($checks, 'Comprobaciones', '#2a2620')
+    . tsm_kpi($inc, 'Incidencias', $inc ? '#c0392b' : '#2f7d54')
+    . '</tr></table>';
+
+  if ($fixed) {
+    $body .= '<p style="margin:26px 0 6px;color:#6b6456;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Páginas principales</p>'
+      . tsm_week_table($fixed);
   }
-  return $h . '</table><p style="color:#999;font-size:11px;margin-top:16px">"Revisada" = nº de comprobaciones esa semana. "Velocidad media" = tiempo medio de carga de las válidas. Monitor dorica.agency</p></div>';
+  if ($fichas) {
+    $body .= '<p style="margin:28px 0 2px;color:#6b6456;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Fichas de masaje · rotación por categoría</p>'
+      . '<p style="margin:0 0 6px;color:#a49a86;font-size:12px;">En cada comprobación se revisa una ficha al azar de cada una de las 6 categorías.</p>'
+      . tsm_week_table($fichas);
+  }
+  $body .= '<p style="margin:24px 0 0;color:#b0a894;font-size:11.5px;line-height:1.5;border-top:1px solid #f0ebe0;padding-top:14px;">'
+    . '<b>Veces</b> = comprobaciones esta semana · <b>Velocidad</b> = tiempo medio de carga · el proceso de pago se mide aparte por ser más lento de forma natural.</p>';
+
+  return tsm_shell('Disponibilidad y velocidad de la semana',
+    'Informe semanal', 'Informe semanal',
+    'Semana del ' . htmlspecialchars($from) . ' al ' . htmlspecialchars($to), '#b99a5b', $body);
 }
 // -----------------------------------------------------------------
 
 $state = is_file($STATE_FILE) ? (json_decode(file_get_contents($STATE_FILE), true) ?: []) : [];
 $stats = is_file($STATS_FILE) ? (json_decode(file_get_contents($STATS_FILE), true) ?: []) : [];
 $today = date('Y-m-d');
-if (!isset($stats['urls'])) $stats = ['lastRun' => null, 'lastReport' => '', 'weekStart' => $today, 'urls' => [], 'alertsLog' => []];
+if (!isset($stats['urls'])) $stats = ['lastRun' => null, 'lastReport' => '', 'weekStart' => $today, 'urls' => [], 'alertsLog' => [], 'daily' => []];
 
 // ---------- Endpoint JSON para el panel de WordPress (no lanza comprobaciones) ----------
 if ($PANEL) {
@@ -168,12 +257,21 @@ if ($PANEL) {
     $week[] = ['name' => $u['name'], 'cat' => $u['cat'], 'url' => $url, 'count' => $u['count'], 'down' => $u['down'],
       'avg_ttfb' => round($u['ttfb_sum'] / $ok, 2), 'avg_total' => round($u['total_sum'] / $ok, 2)];
   }
+  $daily = [];
+  $dd = $stats['daily'] ?? []; ksort($dd);
+  foreach (array_slice($dd, -14, null, true) as $date => $b) {
+    $n = max(1, $b['n']);
+    $daily[] = ['date' => $date,
+      'uptime'    => $b['checks'] ? round(100 * ($b['checks'] - $b['inc']) / $b['checks'], 2) : 100,
+      'avg_total' => round($b['total_sum'] / $n, 2), 'checks' => $b['checks'], 'inc' => $b['inc']];
+  }
   echo json_encode([
     'updated'    => $stats['lastRun'] ?? null,
     'week_start' => $stats['weekStart'] ?? null,
     'summary'    => ['checks' => $checks, 'incidencias' => $inc, 'uptime' => $checks ? round(100 * ($checks - $inc) / $checks, 2) : 100],
     'current'    => $current,
     'week'       => $week,
+    'daily'      => $daily,
     'alerts'     => array_slice($stats['alertsLog'] ?? [], -20),
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
@@ -233,6 +331,14 @@ foreach ($targets as $t) {
   else { $s['ttfb_sum'] += $r['ttfb']; $s['total_sum'] += $r['total']; }
   $stats['urls'][$url] = $s;
 
+  // Serie diaria (30 días) para el gráfico de tendencia del panel. NO se resetea con el informe semanal.
+  $day = substr($now, 0, 10);
+  $db = $stats['daily'][$day] ?? ['checks' => 0, 'inc' => 0, 'ttfb_sum' => 0, 'total_sum' => 0, 'n' => 0];
+  $db['checks']++;
+  if ($ev['down']) $db['inc']++;
+  else { $db['ttfb_sum'] += $r['ttfb']; $db['total_sum'] += $r['total']; $db['n']++; }
+  $stats['daily'][$day] = $db;
+
   $report[] = sprintf('%-24s HTTP %d · TTFB %ss · %s', $t['name'], $r['code'], $r['ttfb'], $ev['detail']);
 }
 
@@ -240,6 +346,10 @@ if ($DRY) { echo "DIAGNÓSTICO (no envía ni guarda):\n" . implode("\n", $report
 
 $stats['lastRun'] = $now;
 $stats['alertsLog'] = array_slice($stats['alertsLog'], -40);
+if (!empty($stats['daily'])) {                       // conservar solo los últimos 30 días
+  ksort($stats['daily']);
+  $stats['daily'] = array_slice($stats['daily'], -30, null, true);
+}
 @file_put_contents($STATE_FILE, json_encode($state));
 @file_put_contents($STATS_FILE, json_encode($stats));
 
