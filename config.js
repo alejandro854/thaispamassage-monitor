@@ -51,13 +51,17 @@ export const PROFILES = {
 // realmente malo, no un simple "mejorable". Medido en 5G la home va a ~99, así
 // que solo salta si la web se degrada de verdad.
 export const THRESHOLDS = {
-  mobile:  { lcp: 4.0, score: 50, ttfb: null },   // LCP en segundos, score 0-100, ttfb en s (null = no se comprueba)
-  desktop: { lcp: 2.5, score: 50, ttfb: null },
+  mobile:  { lcp: 4.0, score: 50, ttfb: 3.5 },   // LCP en segundos, score 0-100, ttfb en s (server lento)
+  desktop: { lcp: 2.5, score: 50, ttfb: 3.0 },
 };
 
 // Nº de mediciones seguidas en rojo antes de avisar (evita falsas alarmas por
 // el ruido normal de Lighthouse). Con cron horario = ~2 horas malas seguidas.
 export const ALERT_AFTER = 2;
+
+// TTFB (s) a partir del cual el servidor está CLARAMENTE saturado: avisa YA,
+// sin esperar a 2 lecturas seguidas (una caída o un TTFB así es una urgencia).
+export const SEVERE_TTFB = 8.0;
 
 // Nº de pasadas por medición (se coge la mediana → menos ruido).
 export const RUNS_PER_CHECK = 2;

@@ -10,7 +10,7 @@
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { PAGES, PROFILES, THRESHOLDS, ALERT_AFTER, HISTORY_FILE, CSV_FILE } from './config.js';
+import { PAGES, PROFILES, THRESHOLDS, ALERT_AFTER, SEVERE_TTFB, HISTORY_FILE, CSV_FILE } from './config.js';
 import { measure } from './lib/lighthouse.js';
 import { renderEmail, renderDigest, subjectFor, sendEmail } from './lib/email.js';
 import { updateSummary, weeklyStats } from './lib/summary.js';
@@ -36,12 +36,14 @@ function appendCSV(rows) {
 
 // --- Evaluación: ¿está mal este resultado? ----------------------------------
 function evaluate(res, ff, page) {
-  if (res.down) return { bad: true, detail: 'no responde / error de carga' };
+  if (res.down) return { bad: true, severe: true, detail: 'no responde / error de carga' };
   const t = (page && page.thresholds && page.thresholds[ff]) || THRESHOLDS[ff];
-  if (res.score < t.score) return { bad: true, detail: `puntuación ${res.score} (límite ${t.score})` };
-  if (t.ttfb && res.ttfb != null && res.ttfb > t.ttfb) return { bad: true, detail: `servidor lento ${res.ttfb}s (límite ${t.ttfb}s)` };
-  if (res.lcp != null && res.lcp > t.lcp) return { bad: true, detail: `LCP ${res.lcp}s (límite ${t.lcp}s)` };
-  return { bad: false, detail: `${res.score} · LCP ${res.lcp}s` };
+  // Servidor CLARAMENTE saturado (TTFB muy alto) = urgencia -> se comprueba primero.
+  if (res.ttfb != null && res.ttfb >= SEVERE_TTFB) return { bad: true, severe: true, detail: `servidor saturado, tarda ${res.ttfb}s en responder (TTFB)` };
+  if (res.score < t.score) return { bad: true, severe: false, detail: `puntuación ${res.score} (límite ${t.score})` };
+  if (t.ttfb && res.ttfb != null && res.ttfb > t.ttfb) return { bad: true, severe: false, detail: `servidor lento ${res.ttfb}s (límite ${t.ttfb}s)` };
+  if (res.lcp != null && res.lcp > t.lcp) return { bad: true, severe: false, detail: `LCP ${res.lcp}s (límite ${t.lcp}s)` };
+  return { bad: false, severe: false, detail: `${res.score} · LCP ${res.lcp}s` };
 }
 
 // --- Medición de todas las páginas ------------------------------------------
@@ -77,7 +79,8 @@ async function run({ report = false } = {}) {
 
       st.consecutiveBad = ev.bad ? st.consecutiveBad + 1 : 0;
 
-      if (ev.bad && st.consecutiveBad >= ALERT_AFTER && !st.alerting) {
+      // Avisa si hay 2 rojas seguidas (degradación sostenida) O si es GRAVE (avisa ya).
+      if (ev.bad && (st.consecutiveBad >= ALERT_AFTER || ev.severe) && !st.alerting) {
         st.alerting = true;
         newAlerts.push({ pageName: pg.name, profileLabel: PROFILES[ff].label, detail: ev.detail });
       } else if (!ev.bad && st.alerting) {
