@@ -295,7 +295,12 @@ if ($WEEKLY && !empty($stats['urls'])) {
 
 // ---------- Objetivos: fijas + 1 ficha al azar de cada categoría ----------
 $targets = [];
-foreach ($FIXED as $f) $targets[] = ['name' => $f['name'], 'url' => $f['url'], 'cat' => null, 'pol' => $f['pol']];
+foreach ($FIXED as $f) {
+  // El checkout es una página MUY pesada (17-30s de PHP, sin caché). Para no cargar el servidor,
+  // lo comprobamos solo cada ~30 min (en los minutos :00 y :30), no en cada ciclo de 5 min.
+  if ($f['pol'] === 'checkout' && ((int) date('i') % 30) >= 5) continue;
+  $targets[] = ['name' => $f['name'], 'url' => $f['url'], 'cat' => null, 'pol' => $f['pol']];
+}
 foreach ($CATEGORIES as $cat => $slugs) {
   $slug = $slugs[array_rand($slugs)];
   $targets[] = ['name' => $slug, 'url' => $BASE . $slug . '/', 'cat' => $cat, 'pol' => 'ficha'];
