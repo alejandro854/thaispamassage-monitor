@@ -301,9 +301,13 @@ foreach ($FIXED as $f) {
   if ($f['pol'] === 'checkout' && ((int) date('i') % 30) >= 5) continue;
   $targets[] = ['name' => $f['name'], 'url' => $f['url'], 'cat' => null, 'pol' => $f['pol']];
 }
-foreach ($CATEGORIES as $cat => $slugs) {
-  $slug = $slugs[array_rand($slugs)];
-  $targets[] = ['name' => $slug, 'url' => $BASE . $slug . '/', 'cat' => $cat, 'pol' => 'ficha'];
+// Las fichas fuerzan generación PHP (páginas sin caché). Para NO cargar Thai, se comprueban
+// solo cada ~30 min (minutos :00 y :30). Cada 5 min solo se miran las páginas clave cacheadas.
+if (((int) date('i') % 30) < 5) {
+  foreach ($CATEGORIES as $cat => $slugs) {
+    $slug = $slugs[array_rand($slugs)];
+    $targets[] = ['name' => $slug, 'url' => $BASE . $slug . '/', 'cat' => $cat, 'pol' => 'ficha'];
+  }
 }
 
 $alerts = []; $recoveries = []; $report = []; $now = date('c');
