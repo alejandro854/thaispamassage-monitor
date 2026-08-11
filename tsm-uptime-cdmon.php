@@ -44,7 +44,7 @@ $POL = [
 $TTFB_LIMIT  = 6.0;    // s: página core lenta -> aviso (tras 2 ciclos)
 $SEVERE_TTFB = 10.0;   // s: página core MUY lenta -> aviso YA (mismo ciclo)
 $TIMEOUT     = 30;     // s: máximo por comprobación
-$ALERT_AFTER = 2;      // lecturas malas seguidas antes de avisar (cuando no es inmediato)
+$ALERT_AFTER = 3;      // lecturas malas SEGUIDAS antes de avisar (~15 min). Evita el ruido de baches breves que se recuperan solos.
 $REPORT_DOW  = 5;      // día del informe semanal (1=lunes … 5=viernes)
 $REPORT_HOUR = 9;      // hora a partir de la cual se envía (mañana)
 
@@ -326,7 +326,7 @@ foreach ($targets as $t) {
   $st['name'] = $t['name']; $st['cat'] = $t['cat'];
   $st['code'] = $r['code']; $st['ttfb'] = $r['ttfb']; $st['total'] = $r['total']; $st['ts'] = $now;
   $st['bad'] = $ev['bad'] ? ($st['bad'] ?? 0) + 1 : 0;
-  if ($ev['bad'] && empty($st['alerting']) && ($st['bad'] >= $ALERT_AFTER || $ev['grave'])) {
+  if ($ev['bad'] && empty($st['alerting']) && $st['bad'] >= $ALERT_AFTER) {   // sin "aviso inmediato": el problema debe persistir
     $st['alerting'] = true;  $alerts[] = ['name' => $t['name'], 'url' => $url, 'detail' => $ev['detail']];
     $stats['alertsLog'][] = ['ts' => $now, 'type' => 'alert', 'name' => $t['name'], 'detail' => $ev['detail']];
   } elseif (!$ev['bad'] && !empty($st['alerting'])) {
