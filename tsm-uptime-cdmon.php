@@ -48,7 +48,7 @@ $ALERT_AFTER = 3;      // lecturas malas SEGUIDAS antes de avisar (~15 min). Evi
 $REPORT_DOW  = 5;      // día del informe semanal (1=lunes … 5=viernes)
 $REPORT_HOUR = 9;      // hora a partir de la cual se envía (mañana)
 
-$RECIPIENTS  = ['alejandro@dorica.agency', 'javier@dorica.agency']; // Alejandro + Javier (Jordi fuera)
+$RECIPIENTS  = ['alejandro@dorica.agency', 'javier@dorica.agency', 'kiapapa2000@gmail.com']; // Alejandro + Javier + Hugo (cliente final)
 $FROM        = 'Monitor Thai Spa <monitor@dorica.agency>';
 $UA          = 'DoricaUptimeBot/1.0 (+https://dorica.agency)';
 $LOGO        = 'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaispamassage.png';
