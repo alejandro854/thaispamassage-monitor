@@ -55,6 +55,7 @@ $LOGO        = 'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaisp
 $TOKEN       = 'tsm_dorica_9f3k7q2x';
 $STATE_FILE  = __DIR__ . '/.tsm-uptime-state.json';   // estado + última lectura por URL
 $STATS_FILE  = __DIR__ . '/.tsm-uptime-stats.json';   // acumulado de la semana + registro de alertas
+$CSS_SAMPLE  = 5;      // nº de hojas de estilo del tema/plugins a verificar por ciclo (assets estáticos = baratísimo)
 // -----------------------------------------------------------------
 
 // Seguridad: por web exige ?key=TOKEN; por cron CLI no hace falta.
@@ -80,6 +81,68 @@ function check($url, $timeout, $ua) {
         'total'=> round((float) curl_getinfo($ch, CURLINFO_TOTAL_TIME), 2)];
   curl_close($ch);
   return $r;
+}
+
+// Descarga el HTML de una página (devuelve código + cuerpo).
+function fetchBody($url, $timeout, $ua) {
+  $ch = curl_init($url);
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 10,
+    CURLOPT_USERAGENT => $ua, CURLOPT_SSL_VERIFYPEER => true,
+  ]);
+  $body = curl_exec($ch);
+  $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return ['code' => $code, 'body' => is_string($body) ? $body : ''];
+}
+
+// Petición HEAD (solo cabeceras): comprobar un asset estático es muy barato.
+function headCode($url, $timeout, $ua) {
+  $ch = curl_init($url);
+  curl_setopt_array($ch, [
+    CURLOPT_NOBODY => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 10,
+    CURLOPT_USERAGENT => $ua, CURLOPT_SSL_VERIFYPEER => true,
+  ]);
+  curl_exec($ch);
+  $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return $code;
+}
+
+// Verifica que las hojas de estilo (tema/plugins) que referencia la home cargan (no 404).
+// Detecta el estado "página sin CSS". Reachable=false si no pudimos leer la home (de la caída
+// ya se encarga el check de uptime, no lo duplicamos aquí).
+function checkAssets($base, $timeout, $ua, $sample) {
+  $home = fetchBody($base, $timeout, $ua);
+  if ($home['code'] < 200 || $home['code'] >= 400 || $home['body'] === '') {
+    return ['reachable' => false, 'checked' => 0, 'bad' => []];
+  }
+  if (!preg_match_all('/<link\b[^>]*\bhref=("|\')(.*?)\1[^>]*>/i', $home['body'], $m, PREG_SET_ORDER)) {
+    return ['reachable' => true, 'checked' => 0, 'bad' => []];
+  }
+  $urls = [];
+  foreach ($m as $tag) {
+    if (!preg_match('/\brel=("|\')?[^"\'>]*stylesheet/i', $tag[0])) continue;   // solo <link rel="stylesheet">
+    $href = html_entity_decode($tag[2], ENT_QUOTES);
+    if (strpos($href, '//') === 0)      $href = 'https:' . $href;
+    elseif (isset($href[0]) && $href[0] === '/') $href = rtrim($base, '/') . $href;
+    if (strpos($href, 'thaispamassage.es') === false) continue;   // solo mismo dominio
+    if (strpos($href, '/wp-content/') === false)      continue;   // tema/plugins (donde ocurría el fallo)
+    $urls[$href] = true;
+    if (count($urls) >= $sample) break;
+  }
+  $bad = [];
+  foreach (array_keys($urls) as $u) {
+    $code = headCode($u, 15, $ua);
+    if ($code !== 200) {                 // re-verifica una vez (mata blips transitorios)
+      usleep(1500000);
+      $code = headCode($u, 15, $ua);
+      if ($code !== 200) $bad[] = ['url' => $u, 'code' => $code];
+    }
+  }
+  return ['reachable' => true, 'checked' => count($urls), 'bad' => $bad];
 }
 
 function evaluate($r, $pol, $ttfbLimit, $severe) {
@@ -169,6 +232,29 @@ function alertHtml($rows, $ok) {
   $tbl .= '</table>';
   return tsm_shell(($ok ? 'La web ha vuelto a la normalidad' : 'Incidencia detectada en la web'),
     $label, $title, date('d/m/Y · H:i') . ' h', $accent, $intro . $tbl);
+}
+
+// Email dedicado para el estado de los estilos (CSS). $ok=true -> recuperación.
+function cssAlertHtml($badlist, $ok) {
+  if ($ok) {
+    $accent = '#2f7d54'; $label = 'Estado de los estilos'; $title = 'Los estilos vuelven a cargar';
+    $body = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+          . '<td style="background-color:#eaf5ee;border:1px solid #cfe6d6;border-radius:12px;padding:16px 18px;color:#256b45;font-size:14px;line-height:1.5;">'
+          . '&#10004;&nbsp; <b>Resuelto.</b> Las hojas de estilo vuelven a cargar correctamente; la web se ve bien.</td></tr></table>';
+  } else {
+    $accent = '#c0392b'; $label = 'Aviso de estilos (CSS)'; $title = 'La web podría verse sin estilos';
+    $body = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+          . '<td style="background-color:#fdecea;border:1px solid #f5c6c1;border-radius:12px;padding:16px 18px;color:#a5352b;font-size:14px;line-height:1.5;">'
+          . '&#9888;&nbsp; <b>Se han detectado hojas de estilo que no cargan (error 404).</b> Es probable que algunas páginas se estén viendo rotas (sin CSS). Suele resolverse limpiando la caché de WP&nbsp;Rocket.</td></tr></table>'
+          . '<p style="margin:22px 0 4px;color:#6b6456;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Archivos afectados</p>'
+          . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;">';
+    foreach ((array) $badlist as $line) {
+      $body .= '<tr><td style="padding:11px 4px;border-top:1px solid #f0ebe0;color:#a5352b;font-size:12px;word-break:break-all;">&#9679;&nbsp;' . htmlspecialchars($line) . '</td></tr>';
+    }
+    $body .= '</table>';
+  }
+  return tsm_shell(($ok ? 'Los estilos han vuelto' : 'La web podría verse sin estilos'),
+    $label, $title, date('d/m/Y · H:i') . ' h', $accent, $body);
 }
 
 // Una tarjeta KPI (celda de una fila de 3).
@@ -275,6 +361,12 @@ if ($PANEL) {
     'week'       => $week,
     'daily'      => $daily,
     'alerts'     => array_slice($stats['alertsLog'] ?? [], -20),
+    'css'        => isset($state['__assets__']) ? [
+      'ok'      => $state['__assets__']['ok'] ?? true,
+      'checked' => $state['__assets__']['checked'] ?? 0,
+      'bad'     => $state['__assets__']['badlist'] ?? [],
+      'ts'      => $state['__assets__']['ts'] ?? null,
+    ] : null,
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 }
@@ -355,6 +447,30 @@ foreach ($targets as $t) {
   $report[] = sprintf('%-24s HTTP %d · TTFB %ss · %s', $t['name'], $r['code'], $r['ttfb'], $ev['detail']);
 }
 
+// ---------- Integridad de estilos (CSS): detecta "página sin CSS" ----------
+// Assets estáticos (nginx los sirve sin PHP) → coste casi nulo, se puede mirar cada ciclo.
+$cssAlert = null; $cssRecovery = null;
+$as = checkAssets($BASE, $TIMEOUT, $UA, $CSS_SAMPLE);
+if ($as['reachable']) {
+  $ast  = $state['__assets__'] ?? ['bad' => 0, 'alerting' => false];
+  $nbad = count($as['bad']);
+  $ast['checked'] = $as['checked'];
+  $ast['nbad']    = $nbad;
+  $ast['badlist'] = array_slice(array_map(function ($b) { return $b['url'] . ' (' . $b['code'] . ')'; }, $as['bad']), 0, 8);
+  $ast['ok']      = ($nbad === 0);
+  $ast['ts']      = $now;
+  $ast['bad']     = $nbad > 0 ? (($ast['bad'] ?? 0) + 1) : 0;
+  if ($nbad > 0 && empty($ast['alerting']) && $ast['bad'] >= $ALERT_AFTER) {   // exige persistencia (~15 min), como el resto
+    $ast['alerting'] = true; $cssAlert = $ast['badlist'];
+    $stats['alertsLog'][] = ['ts' => $now, 'type' => 'alert', 'name' => 'Estilos (CSS)', 'detail' => $nbad . ' hoja(s) de estilo no cargan'];
+  } elseif ($nbad === 0 && !empty($ast['alerting'])) {
+    $ast['alerting'] = false; $cssRecovery = true;
+    $stats['alertsLog'][] = ['ts' => $now, 'type' => 'recovery', 'name' => 'Estilos (CSS)', 'detail' => 'estilos OK'];
+  }
+  $state['__assets__'] = $ast;
+  $report[] = sprintf('%-24s %d comprobados · %d con error', 'Estilos (CSS)', $as['checked'], $nbad);
+}
+
 if ($DRY) { echo "DIAGNÓSTICO (no envía ni guarda):\n" . implode("\n", $report) . "\n"; exit; }
 
 $stats['lastRun'] = $now;
@@ -368,5 +484,7 @@ if (!empty($stats['daily'])) {                       // conservar solo los últi
 
 if ($alerts)     sendMail($RECIPIENTS, 'Thai Spa Massage — AVISO: web caída o lenta (' . count($alerts) . ')', alertHtml($alerts, false), $FROM);
 if ($recoveries) sendMail($RECIPIENTS, 'Thai Spa Massage — Recuperado', alertHtml($recoveries, true), $FROM);
+if ($cssAlert)    sendMail($RECIPIENTS, 'Thai Spa Massage — AVISO: estilos rotos (CSS no carga)', cssAlertHtml($cssAlert, false), $FROM);
+if ($cssRecovery) sendMail($RECIPIENTS, 'Thai Spa Massage — Estilos recuperados', cssAlertHtml([], true), $FROM);
 
 echo 'ok ' . $now . ' | comprobadas:' . count($targets) . ' avisos:' . count($alerts) . ' recuperados:' . count($recoveries) . "\n";
