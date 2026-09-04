@@ -164,8 +164,15 @@ function evaluate($r, $pol, $ttfbLimit, $severe) {
 }
 
 function sendMail($to, $subject, $html, $from) {
-  $headers = "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nFrom: {$from}\r\n";
-  @mail(implode(',', $to), '=?UTF-8?B?' . base64_encode($subject) . '?=', $html, $headers);
+  // El HTML va en una sola línea muy larga; sin codificar, el servidor de correo la parte a
+  // la fuerza y puede cortar una etiqueta (aparecía un "</td>" suelto en el informe). Con
+  // quoted-printable las líneas se cortan de forma segura (con "=") y el cliente las recompone.
+  $headers = "MIME-Version: 1.0\r\n"
+           . "Content-Type: text/html; charset=UTF-8\r\n"
+           . "Content-Transfer-Encoding: quoted-printable\r\n"
+           . "From: {$from}\r\n";
+  $body = function_exists('quoted_printable_encode') ? quoted_printable_encode($html) : $html;
+  @mail(implode(',', $to), '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
 }
 
 // Plantilla base de email (segura para todos los clientes: tablas + estilos inline + logo Thai).
