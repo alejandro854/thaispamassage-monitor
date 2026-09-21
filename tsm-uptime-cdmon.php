@@ -194,7 +194,7 @@ function tsm_shell($preheader, $label, $title, $sub, $accent, $body) {
   . '<tr><td style="padding:28px 32px;color:#3a352c;font-size:14px;line-height:1.55;">' . $body . '</td></tr>'
   . '<tr><td style="background-color:#faf7f0;border-top:1px solid #ece5d6;padding:22px 32px;text-align:center;">'
   . '<div style="color:#8a8272;font-size:12px;line-height:1.6;">Monitorización automática de <b style="color:#6b6456;">thaispamassage.es</b><br>Comprobación cada 5&nbsp;minutos desde servidor propio · sin servicios externos</div>'
-  . '<div style="margin-top:12px;"><a href="https://dorica.agency" style="color:#c9a86a;font-size:11px;letter-spacing:1px;text-transform:uppercase;text-decoration:none;">dorica.agency</a></div>'
+  . '<div style="margin-top:12px;"><a href="https://dorica.agency" style="color:#c9a86a;font-size:11px;letter-spacing:1px;text-transform:uppercase;text-decoration:none;"><img src="https://dorica.agency/logo-dorica-mail.png" alt="dorica.agency" width="65" height="18" style="width:65px;height:18px;display:inline-block;border:0;vertical-align:middle;"></a></div>'
   . '</td></tr>'
   . '</table>'
   . '<div style="color:#b3ab99;font-size:11px;margin-top:14px;">Aviso automático para el equipo responsable de la web.</div>'
