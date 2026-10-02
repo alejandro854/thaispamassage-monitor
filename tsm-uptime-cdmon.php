@@ -7,6 +7,10 @@
  *  - Antes de avisar, RE-COMPRUEBA una vez (mata picos transitorios).
  *  - Acumula estadística por URL y envía un INFORME SEMANAL automático cada
  *    VIERNES por la mañana (veces revisada + velocidad media + incidencias).
+ *  - COMPRA DE PRUEBA cada ~30 min: carrito → finalizar compra → pago con tarjeta visible →
+ *    cálculo del pedido → «Realizar pedido». La web (mu-plugin tsm-compra-prueba.php) la corta
+ *    justo ANTES de crear el pedido: no hay pedidos, ni pendientes ni fallidos, ni paso por Redsys.
+ *    Si falla (dos intentos seguidos) avisa al momento: es lo más crítico de la web.
  *  - ?panel=1 devuelve JSON que consume el panel de WordPress (estado + semana).
  * Reversible: borrar el archivo y la tarea de cron.
  */
@@ -55,6 +59,7 @@ $LOGO        = 'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaisp
 $TOKEN       = 'tsm_dorica_9f3k7q2x';
 $STATE_FILE  = __DIR__ . '/.tsm-uptime-state.json';   // estado + última lectura por URL
 $STATS_FILE  = __DIR__ . '/.tsm-uptime-stats.json';   // acumulado de la semana + registro de alertas
+$SYNTH_KEY   = '__TSM_SYNTH_KEY__';   // clave de la compra de prueba (la real solo está en el servidor; el repo es público)
 $CSS_SAMPLE  = 5;      // nº de hojas de estilo del tema/plugins a verificar por ciclo (assets estáticos = baratísimo)
 // -----------------------------------------------------------------
 
@@ -143,6 +148,69 @@ function checkAssets($base, $timeout, $ua, $sample) {
     }
   }
   return ['reachable' => true, 'checked' => count($urls), 'bad' => $bad];
+}
+
+// Compra de prueba completa con una sesión propia (cookies en memoria). Devuelve
+// ['ok' => bool, 'step' => paso, 'detail' => texto para el aviso, 'secs' => duración total].
+function compraPrueba($base, $key, $ua) {
+  $t0 = microtime(true);
+  $ch = curl_init();
+  $base = rtrim($base, '/');
+  $req = function ($url, $post = null, $follow = true) use ($ch, $key, $ua) {
+    $opt = [
+      CURLOPT_URL => $url, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => $follow,
+      CURLOPT_TIMEOUT => 60, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_USERAGENT => $ua,
+      CURLOPT_SSL_VERIFYPEER => true, CURLOPT_COOKIEFILE => '', CURLOPT_ENCODING => '',
+      CURLOPT_HTTPHEADER => ['X-TSM-Synthetic: ' . $key, 'X-Requested-With: XMLHttpRequest'],
+    ];
+    if ($post !== null) { $opt[CURLOPT_POST] = true; $opt[CURLOPT_POSTFIELDS] = http_build_query($post); }
+    else                { $opt[CURLOPT_HTTPGET] = true; }
+    curl_setopt_array($ch, $opt);
+    $body = curl_exec($ch);
+    return ['code' => (int) curl_getinfo($ch, CURLINFO_HTTP_CODE), 'body' => is_string($body) ? $body : ''];
+  };
+  $fin = function ($ok, $step, $detail) use ($ch, $t0) {
+    curl_close($ch);
+    return ['ok' => $ok, 'step' => $step, 'detail' => $detail, 'secs' => round(microtime(true) - $t0, 1)];
+  };
+
+  // 1. Producto de prueba (la web elige la tarjeta regalo más barata disponible).
+  $r = $req($base . '/?tsm_synth=info');
+  $info = json_decode($r['body'], true);
+  if ($r['code'] !== 200 || empty($info['ok'])) return $fin(false, 'Producto', 'No se pudo preparar la compra de prueba (HTTP ' . $r['code'] . ')');
+
+  // 2. Añadir al carrito.
+  $post = ['add-to-cart' => $info['product_id'], 'product_id' => $info['product_id'], 'variation_id' => $info['variation_id'], 'quantity' => 1] + (array) $info['attributes'];
+  $r = $req($info['url'], $post, false);
+  if ($r['code'] >= 500 || $r['code'] === 0) return $fin(false, 'Carrito', 'No se puede añadir una tarjeta regalo al carrito (HTTP ' . $r['code'] . ')');
+
+  // 3. Finalizar compra: carga, lleva el producto y ofrece pago con tarjeta.
+  $r = $req($base . '/finalizar-compra/');
+  if ($r['code'] !== 200) return $fin(false, 'Finalizar compra', 'La página de pago no carga (HTTP ' . $r['code'] . ')');
+  if (strpos($r['body'], 'id="payment_method_redsys"') === false) return $fin(false, 'Pago con tarjeta', 'En la página de pago no aparece el pago con tarjeta (Redsys)');
+  preg_match('/"update_order_review_nonce":"([^"]+)"/', $r['body'], $m1);
+  preg_match('/name="woocommerce-process-checkout-nonce" value="([^"]+)"/', $r['body'], $m2);
+  if (empty($m1[1]) || empty($m2[1])) return $fin(false, 'Finalizar compra', 'La página de pago no tiene el formulario de compra (¿carrito vacío?)');
+
+  // 4. Cálculo del pedido (lo que falló el 30-09-2026: el botón se quedaba «pensando»).
+  $r = $req($base . '/?wc-ajax=update_order_review', ['security' => $m1[1], 'payment_method' => 'redsys', 'country' => 'ES', 'post_data' => 'billing_country=ES']);
+  $j = json_decode($r['body'], true);
+  if ($r['code'] !== 200 || ($j['result'] ?? '') !== 'success') return $fin(false, 'Cálculo del pedido', 'El cálculo del pedido falla (HTTP ' . $r['code'] . '): el pago se queda «pensando»');
+
+  // 5. «Realizar pedido»: la web valida todo y corta antes de crear el pedido.
+  $r = $req($base . '/?wc-ajax=checkout', [
+    'billing_first_name' => 'Monitor', 'billing_last_name' => 'Prueba dorica', 'billing_country' => 'ES',
+    'billing_phone' => '600000000', 'billing_email' => 'monitor@dorica.agency', 'billing_email_confirm' => 'monitor@dorica.agency',
+    'billing_name_from' => 'Monitor', 'billing_name_to' => 'Prueba', 'payment_method' => 'redsys',
+    'woocommerce-process-checkout-nonce' => $m2[1], '_wp_http_referer' => '/finalizar-compra/',
+  ]);
+  $j = json_decode($r['body'], true);
+  if ($r['code'] !== 200 || !is_array($j)) return $fin(false, 'Realizar pedido', 'Al pulsar «Realizar pedido» la web da error (HTTP ' . $r['code'] . ')');
+  if (($j['tsm_synthetic'] ?? '') !== 'ok') {
+    $msg = !empty($j['errors']) ? implode(' · ', (array) $j['errors']) : trim(strip_tags($j['messages'] ?? 'respuesta inesperada'));
+    return $fin(false, 'Realizar pedido', 'Al pulsar «Realizar pedido»: ' . (function_exists('mb_substr') ? mb_substr($msg, 0, 220) : substr($msg, 0, 220)));
+  }
+  return $fin(true, 'OK', 'Compra completa OK (' . ($j['total'] ?? '?') . ' €, pago con tarjeta disponible)');
 }
 
 function evaluate($r, $pol, $ttfbLimit, $severe) {
@@ -264,6 +332,27 @@ function cssAlertHtml($badlist, $ok) {
     $label, $title, date('d/m/Y · H:i') . ' h', $accent, $body);
 }
 
+// Email de la compra de prueba. $ok=true -> recuperación.
+function compraAlertHtml($res, $ok) {
+  if ($ok) {
+    $accent = '#2f7d54'; $label = 'Compra de prueba'; $title = 'La compra vuelve a funcionar';
+    $body = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+          . '<td style="background-color:#eaf5ee;border:1px solid #cfe6d6;border-radius:12px;padding:16px 18px;color:#256b45;font-size:14px;line-height:1.5;">'
+          . '&#10004;&nbsp; <b>Resuelto.</b> La compra de prueba ha llegado hasta el pago con tarjeta sin problemas. Los clientes ya pueden comprar con normalidad.</td></tr></table>';
+  } else {
+    $accent = '#c0392b'; $label = 'AVISO · Compra de prueba'; $title = 'Los clientes no pueden comprar';
+    $body = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+          . '<td style="background-color:#fdecea;border:1px solid #f5c6c1;border-radius:12px;padding:16px 18px;color:#a5352b;font-size:14px;line-height:1.5;">'
+          . '&#9888;&nbsp; <b>La compra de prueba ha fallado dos veces seguidas.</b> Es muy probable que ahora mismo los clientes no puedan comprar tarjetas ni cajas regalo en la web. Conviene revisarlo cuanto antes.</td></tr></table>'
+          . '<p style="margin:22px 0 4px;color:#6b6456;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Dónde falla</p>'
+          . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;">'
+          . tsm_row($res['step'], 'https://thaispamassage.es/finalizar-compra/', $res['detail'], $accent, '&#9679;') . '</table>'
+          . '<p style="margin:18px 0 0;color:#9a927f;font-size:12px;line-height:1.5;">La prueba no crea pedidos ni cobra nada: se detiene justo antes de crear el pedido.</p>';
+  }
+  return tsm_shell(($ok ? 'La compra vuelve a funcionar' : 'Los clientes no pueden comprar en la web'),
+    $label, $title, date('d/m/Y · H:i') . ' h', $accent, $body);
+}
+
 // Una tarjeta KPI (celda de una fila de 3).
 function tsm_kpi($value, $label, $color) {
   return '<td width="33%" align="center" style="padding:0 5px;" valign="top">'
@@ -368,6 +457,13 @@ if ($PANEL) {
     'week'       => $week,
     'daily'      => $daily,
     'alerts'     => array_slice($stats['alertsLog'] ?? [], -20),
+    'compra'     => isset($state['__compra__']) ? [
+      'ok'     => $state['__compra__']['ok'] ?? true,
+      'step'   => $state['__compra__']['step'] ?? '',
+      'detail' => $state['__compra__']['detail'] ?? '',
+      'secs'   => $state['__compra__']['secs'] ?? null,
+      'ts'     => $state['__compra__']['ts'] ?? null,
+    ] : null,
     'css'        => isset($state['__assets__']) ? [
       'ok'      => $state['__assets__']['ok'] ?? true,
       'checked' => $state['__assets__']['checked'] ?? 0,
@@ -478,6 +574,25 @@ if ($as['reachable']) {
   $report[] = sprintf('%-24s %d comprobados · %d con error', 'Estilos (CSS)', $as['checked'], $nbad);
 }
 
+// ---------- Compra de prueba (cada ~30 min, o siempre con ?compra=1 en diagnóstico) ----------
+$compraAlert = null; $compraRecovery = null;
+$FORCE_COMPRA = (PHP_SAPI !== 'cli' && (($_GET['compra'] ?? '') === '1'));
+if ($SYNTH_KEY !== '' && strpos($SYNTH_KEY, '__') !== 0 && (((int) date('i') % 30) < 5 || $FORCE_COMPRA)) {
+  $cp = compraPrueba($BASE, $SYNTH_KEY, $UA);
+  if (!$cp['ok']) { sleep(20); $cp = compraPrueba($BASE, $SYNTH_KEY, $UA); }   // 2º intento: descarta un fallo puntual
+  $cst = $state['__compra__'] ?? ['alerting' => false];
+  $cst = array_merge($cst, ['ok' => $cp['ok'], 'step' => $cp['step'], 'detail' => $cp['detail'], 'secs' => $cp['secs'], 'ts' => $now]);
+  if (!$cp['ok'] && empty($cst['alerting'])) {           // crítico: avisa ya (ya son 2 intentos fallidos)
+    $cst['alerting'] = true; $compraAlert = $cp;
+    $stats['alertsLog'][] = ['ts' => $now, 'type' => 'alert', 'name' => 'Compra de prueba', 'detail' => $cp['step'] . ': ' . $cp['detail']];
+  } elseif ($cp['ok'] && !empty($cst['alerting'])) {
+    $cst['alerting'] = false; $compraRecovery = $cp;
+    $stats['alertsLog'][] = ['ts' => $now, 'type' => 'recovery', 'name' => 'Compra de prueba', 'detail' => 'compra OK'];
+  }
+  $state['__compra__'] = $cst;
+  $report[] = sprintf('%-24s %s · %s · %ss', 'Compra de prueba', $cp['ok'] ? 'OK' : 'FALLO', $cp['step'] . ' — ' . $cp['detail'], $cp['secs']);
+}
+
 if ($DRY) { echo "DIAGNÓSTICO (no envía ni guarda):\n" . implode("\n", $report) . "\n"; exit; }
 
 $stats['lastRun'] = $now;
@@ -492,6 +607,8 @@ if (!empty($stats['daily'])) {                       // conservar solo los últi
 if ($alerts)     sendMail($RECIPIENTS, 'Thai Spa Massage — AVISO: web caída o lenta (' . count($alerts) . ')', alertHtml($alerts, false), $FROM);
 if ($recoveries) sendMail($RECIPIENTS, 'Thai Spa Massage — Recuperado', alertHtml($recoveries, true), $FROM);
 if ($cssAlert)    sendMail($RECIPIENTS, 'Thai Spa Massage — AVISO: estilos rotos (CSS no carga)', cssAlertHtml($cssAlert, false), $FROM);
+if ($compraAlert)    sendMail($RECIPIENTS, 'Thai Spa Massage — URGENTE: la compra en la web no funciona', compraAlertHtml($compraAlert, false), $FROM);
+if ($compraRecovery) sendMail($RECIPIENTS, 'Thai Spa Massage — La compra vuelve a funcionar', compraAlertHtml($compraRecovery, true), $FROM);
 if ($cssRecovery) sendMail($RECIPIENTS, 'Thai Spa Massage — Estilos recuperados', cssAlertHtml([], true), $FROM);
 
 echo 'ok ' . $now . ' | comprobadas:' . count($targets) . ' avisos:' . count($alerts) . ' recuperados:' . count($recoveries) . "\n";

@@ -17,3 +17,4 @@ cdp_*.mjs
 /logo.png
 gen-preview*.mjs
 panel-preview.*
+.tools/
