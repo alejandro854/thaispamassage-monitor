@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Monitor de disponibilidad
  * Description: Panel de disponibilidad y velocidad de thaispamassage.es. Los datos los genera el Monitor dorica (servidor propio de dorica.agency, comprueba cada 5 min sin depender de servicios externos).
- * Version:     2.1.0
+ * Version:     2.2.0
  * Author:      dorica.agency
  * Author URI:  https://dorica.agency/
  */
@@ -13,12 +13,13 @@ define('TSM_MON_PANEL_URL', 'https://dorica.agency/tsm-uptime.php?panel=1&key=ts
 define('TSM_MON_LOGO',      'https://thaispamassage.es/wp-content/uploads/2022/06/logo-thaispamassage.png');
 
 add_action('admin_menu', function () {
+    // Página de nivel superior, contigua a "Informe Promos" bajo el separador "dorica" del tema.
     add_menu_page('Monitorización', 'Monitorización', 'manage_options',
-        'tsm-monitor', 'tsm_mon_render_page', 'dashicons-chart-area', 58);
+        'tsm-monitor', 'tsm_mon_render_page', 'dashicons-chart-area', 58.82);
 });
 
 add_action('admin_enqueue_scripts', function ($hook) {
-    if ($hook !== 'toplevel_page_tsm-monitor') return;
+    if (strpos($hook, 'tsm-monitor') === false) return;
     wp_enqueue_script('tsm-chartjs', plugins_url('chart.umd.min.js', __FILE__), array(), '4.4.4', true);
 });
 
@@ -36,6 +37,48 @@ function tsm_mon_get_data($force = false) {
 
 // Color por velocidad de carga (segundos): verde rápido, ámbar, rojo lento.
 function tsm_mon_speed_color($s) { return $s === null ? '#9ca3af' : ($s <= 1.5 ? '#16a34a' : ($s <= 4 ? '#d97706' : '#dc2626')); }
+
+// Tarjeta «Compra de prueba»: estado, los 5 pasos de la compra y la última prueba.
+function tsm_mon_render_compra($c) {
+    $pasos = array('Carrito', 'Finalizar compra', 'Pago con tarjeta', 'Cálculo del pedido', 'Realizar pedido');
+    $mapa  = array('Producto' => 0, 'Carrito' => 0, 'Finalizar compra' => 1, 'Pago con tarjeta' => 2, 'Cálculo del pedido' => 3, 'Realizar pedido' => 4);
+    $cart  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>';
+
+    if (!$c) {
+        $color = '#9ca3af'; $bg = '#f3f4f6'; $estado = 'Pendiente de la primera prueba'; $pill = 'Sin datos'; $falla = null; $when = 'Se hace cada 30 minutos (a en punto y a y media).';
+    } else {
+        $mins  = $c['ts'] ? (time() - strtotime($c['ts'])) / 60 : 999;
+        $hace  = $mins < 90 ? 'hace ' . max(1, round($mins)) . ' min' : 'hace ' . round($mins / 60, 1) . ' h';
+        $when  = 'Última prueba: ' . wp_date('j M, H:i', strtotime($c['ts'])) . ' h · ' . $hace . ' · tardó ' . number_format((float) $c['secs'], 1, ',', '') . ' s · se repite cada 30 min';
+        if (empty($c['ok'])) {
+            $color = '#dc2626'; $bg = '#fef2f2'; $estado = 'La compra no funciona'; $pill = 'Aviso enviado'; $falla = isset($mapa[$c['step']]) ? $mapa[$c['step']] : 4;
+        } elseif ($mins > 45) {
+            $color = '#d97706'; $bg = '#fffbeb'; $estado = 'Sin prueba reciente'; $pill = 'Revisar monitor'; $falla = null;
+        } else {
+            $color = '#16a34a'; $bg = '#f0fdf4'; $estado = 'La compra funciona correctamente'; $pill = 'Todo OK'; $falla = null;
+        }
+    }
+
+    echo '<div class="tsm-buy anim" style="animation-delay:150ms"><div class="accent" style="background:' . $color . '"></div>';
+    echo '<div class="top"><div class="ico" style="background:' . $bg . ';color:' . $color . '">' . $cart . '</div>';
+    echo '<div class="txt"><div class="k">Compra de prueba</div><div class="state" style="color:' . $color . '">' . esc_html($estado) . '</div>';
+    echo '<div class="when">' . esc_html($when) . '</div>';
+    if ($c && empty($c['ok'])) echo '<div class="err"><b>' . esc_html($c['step']) . ':</b> ' . esc_html($c['detail']) . '</div>';
+    echo '</div><span class="pill" style="background:' . $bg . ';color:' . $color . '">' . esc_html($pill) . '</span></div>';
+
+    echo '<div class="tsm-steps">';
+    foreach ($pasos as $i => $p) {
+        if (!$c)                         { $sc = '#d1d5db'; $sym = $i + 1; $lc = '#e5e7eb'; }
+        elseif ($falla === null)         { $sc = ($color === '#d97706') ? '#d97706' : '#16a34a'; $sym = '&#10003;'; $lc = $sc; }
+        elseif ($i < $falla)             { $sc = '#16a34a'; $sym = '&#10003;'; $lc = '#16a34a'; }
+        elseif ($i === $falla)           { $sc = '#dc2626'; $sym = '&#10005;'; $lc = '#16a34a'; }
+        else                             { $sc = '#d1d5db'; $sym = $i + 1; $lc = '#e5e7eb'; }
+        echo '<div class="tsm-step" style="--c-line:' . $lc . '"><div class="b" style="background:' . $sc . '">' . $sym . '</div><div class="l">' . esc_html($p) . '</div></div>';
+    }
+    echo '</div>';
+    echo '<div class="foot">Recorre la compra de una tarjeta regalo igual que un cliente y se detiene justo antes de crear el pedido: <b>no genera pedidos, emails ni cobros</b>. Si falla dos veces seguidas, envía un aviso urgente por email.</div>';
+    echo '</div>';
+}
 
 function tsm_mon_render_page() {
     if (!current_user_can('manage_options')) return;
@@ -90,6 +133,25 @@ function tsm_mon_render_page() {
     .tsm-seg button{border:0;background:transparent;padding:6px 15px;border-radius:8px;font-size:12.5px;font-weight:600;color:#6b7280;cursor:pointer;transition:.2s}
     .tsm-seg button.on{background:#fff;color:#1f2430;box-shadow:0 1px 3px rgba(0,0,0,.1)}
     .tsm-note{font-size:11.5px;color:#9ca3af;margin:10px 2px 0}
+    /* Compra de prueba */
+    .tsm-buy{background:#fff;border:1px solid var(--line);border-radius:18px;margin:22px 0 4px;overflow:hidden;position:relative}
+    .tsm-buy .accent{position:absolute;left:0;top:0;bottom:0;width:5px}
+    .tsm-buy .top{display:flex;align-items:center;gap:18px;padding:20px 24px 16px 28px;flex-wrap:wrap}
+    .tsm-buy .ico{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex:0 0 52px}
+    .tsm-buy .ico svg{width:26px;height:26px}
+    .tsm-buy .txt{flex:1;min-width:220px}
+    .tsm-buy .k{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+    .tsm-buy .state{font-size:22px;font-weight:800;line-height:1.15;margin-top:3px}
+    .tsm-buy .when{font-size:12.5px;color:#6b7280;margin-top:5px}
+    .tsm-buy .err{margin-top:8px;font-size:13px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:8px 12px}
+    .tsm-buy .pill{font-size:12px;font-weight:700;padding:7px 13px;border-radius:999px;white-space:nowrap}
+    .tsm-steps{display:flex;align-items:flex-start;padding:4px 24px 18px 28px;gap:0;overflow-x:auto}
+    .tsm-step{flex:1;min-width:104px;text-align:center;position:relative}
+    .tsm-step::before{content:"";position:absolute;top:15px;left:-50%;right:50%;height:2px;background:var(--c-line,#e5e7eb)}
+    .tsm-step:first-child::before{display:none}
+    .tsm-step .b{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff}
+    .tsm-step .l{font-size:12px;color:#4b5563;margin-top:7px;line-height:1.3;font-weight:600}
+    .tsm-buy .foot{border-top:1px solid #f0eee7;background:#faf9f5;padding:11px 24px 11px 28px;font-size:12px;color:#6b7280}
     </style>
 
     <div class="wrap tsm-mon">
@@ -108,6 +170,8 @@ function tsm_mon_render_page() {
     $updated = isset($d['updated']) ? $d['updated'] : null;
     $anyAlerting = false;
     foreach ($current as $c) { if (!empty($c['alerting'])) $anyAlerting = true; }
+    $compra = isset($d['compra']) && is_array($d['compra']) ? $d['compra'] : null;
+    $compraFalla = $compra && empty($compra['ok']);
 
     // Frescura: el cron corre cada 5 min; si hace >20 min que no mide, algo va mal.
     $stale = false; $ago = '';
@@ -117,6 +181,7 @@ function tsm_mon_render_page() {
         $ago = $mins < 90 ? 'hace ' . max(1, round($mins)) . ' min' : 'hace ' . round($mins / 60, 1) . ' h';
     }
     if ($stale)             { $st = array('#f59e0b', '#fffbeb', 'El monitor lleva ' . $ago . ' sin medir — revísalo'); }
+    elseif ($compraFalla)   { $st = array('#f87171', 'rgba(220,38,38,.18)', 'La compra en la web no funciona'); }
     elseif ($anyAlerting)   { $st = array('#f87171', 'rgba(220,38,38,.18)', 'Aviso activo en alguna página'); }
     else                    { $st = array('#16a34a', 'rgba(22,163,74,.16)', 'Todo funcionando correctamente'); }
 
@@ -134,6 +199,9 @@ function tsm_mon_render_page() {
     echo '<div class="tsm-kpi anim" style="animation-delay:60ms"><div class="k">Comprobaciones</div><div class="v">' . intval($summary['checks']) . '</div></div>';
     echo '<div class="tsm-kpi anim" style="animation-delay:120ms"><div class="k">Incidencias</div><div class="v" style="color:' . ($summary['incidencias'] ? '#dc2626' : '#16a34a') . '">' . intval($summary['incidencias']) . '</div></div>';
     echo '</div>';
+
+    // --- COMPRA DE PRUEBA (cada 30 min, sin crear pedidos) ---
+    tsm_mon_render_compra($compra);
 
     // --- TARJETAS: estado actual de las páginas fijas ---
     echo '<h2 class="sec">Estado actual</h2>';
@@ -204,7 +272,7 @@ function tsm_mon_render_page() {
         echo '</tbody></table>';
     }
 
-    echo '<p class="tsm-foot">Informe semanal automático cada viernes por la mañana · comprobación cada 5 min desde el servidor propio de <a href="https://dorica.agency/" target="_blank">dorica.agency</a> (sin servicios externos)</p>';
+    echo '<p class="tsm-foot">Informe semanal automático cada viernes por la mañana · compra de prueba cada 30 min · comprobación cada 5 min desde el servidor propio de <a href="https://dorica.agency/" target="_blank">dorica.agency</a> (sin servicios externos)</p>';
     echo '</div>';
 
     // --- JS: contadores animados + gráfica de tendencia ---
