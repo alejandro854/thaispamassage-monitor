@@ -34,7 +34,7 @@ $CATEGORIES = [
   'En pareja'     => ['masaje-en-pareja','masaje-jacuzzi-en-pareja','masaje-deluxe-parejas'],
   'Belleza'       => ['masaje-facial','masaje-body-scrub','face-spa-massage'],
   'Embarazadas'   => ['mother-thai-massage','masaje-pies-embarazadas','head-mother-massage'],
-  'Masaje + menú' => ['promo/promocion-kasa','promo/promocion-thai-gracia','promocion-comida-cena'],
+  'Masaje + menú' => ['promo/promocion-thai-gracia','promocion-comida-cena'],
 ];
 
 // Políticas: down0 = un timeout/sin-respuesta cuenta como caída; slow = vigila TTFB alto;
